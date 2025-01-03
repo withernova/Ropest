@@ -1,4 +1,3 @@
-repository "ROD@tj_wechat_os_qy0zmfcs3jhzjdhcttafma2eq_unity@cloud.cn"
+rep "ROD@tj_wechat_os_qy0zmfcs3jhzjdhcttafma2eq_unity@cloud.cn"
   path "/"
-    br "/main"
-    co "/main"
+    smartbranch "/main"

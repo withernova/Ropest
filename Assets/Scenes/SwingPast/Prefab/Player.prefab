@@ -245,7 +245,20 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: eb7bf25f9521827468bbb0c57096a6e1, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  freeLookCamera: {fileID: 0}
+  walkSpeed: 0
+  runMultiplier: 0
+  jumpForce: 0
+  gravity: -9.81
+  playerCamera: {fileID: 23065837434039636}
+  mouseSensivity: 0
+  mouseVerticalClamp: 0
+  jumpKey: 32
+  runKey: 304
+  footstepSource: {fileID: 0}
+  groundCheckDistance: 1
+  footstepRate: 1
+  runningFootstepRate: 1.5
+  groundLayers: []
 --- !u!1 &3810384679795191529
 GameObject:
   m_ObjectHideFlags: 0

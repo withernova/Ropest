@@ -22,6 +22,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
     public Vector3[] ghostPrev;
     public Vector3[] ghostVels;
 
+    public Quaternion[] pointQ;
 
     public float[] ghostInvMass;
     public float[] pointInvMass;
@@ -45,11 +46,8 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
     protected override void AddConstraints()
     {
         m_constraints.Add(new EdgeConstraint(this));
-        //m_constraints.Add(new DoubleDistanceConstraint(this));
-
-        m_constraints.Add(new BendingAndTwistingConstraint(this));
-        //m_constraints.Add(new TargetConstraint(this));
         //m_constraints.Add(new Volume2Constraint(this));
+        m_constraints.Add(new BendingAndTwistingConstraint(this));
         //m_constraints.Add(new BendTwistConstraint(this));
     }
 
@@ -99,6 +97,16 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
             length[i] = (pointPos[i] - pointPos[i + 1]).magnitude;
         }
 
+        pointQ = new Quaternion[pointPos.Count() - 1];
+        Vector3 from = new Vector3(0, 0, 1);
+        for (int i = 0; i < pointPos.Count() - 1; i++)
+        {
+            Vector3 to = (points[i + 1] - points[i]).normalized;
+            Quaternion dq = Quaternion.FromToRotation(from, to);
+            if (i == 0) pointQ[i] = dq;
+            else pointQ[i] = dq * pointQ[i - 1];
+            from = to;
+        }
 
     }
 
@@ -139,22 +147,22 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
                 continue;
             }
 
-            if (i == 0 || i == pointPos.Count() - 1)
-            {
-                pointPos[i] = prevPos[i];
-                continue;
-            }
+            //if (i == 0 || i == pointPos.Count() - 1)
+            //{
+            //    pointPos[i] = prevPos[i];
+            //    continue;
+            //}
             //vel[i] += g * dt;
 
-            prevPos[i] = pointPos[i];
-            pointPos[i] = Vector3.Lerp(pointPos[i], pointPos[i] + vel[i] * dt, 0.8f);
+            //prevPos[i] = pointPos[i];
+            //pointPos[i] = Vector3.Lerp(pointPos[i], pointPos[i] + vel[i] * dt, 0.8f);
 
-            if (i < pointPos.Count() - 1)
-            {
+            //if (i < pointPos.Count() - 1)
+            //{
 
-                ghostPrev[i] = ghostPos[i];
-                ghostPos[i] = Vector3.Lerp(ghostPos[i], ghostPos[i] + ghostVels[i] * dt, 0.8f);
-            }
+            //    ghostPrev[i] = ghostPos[i];
+            //    ghostPos[i] = Vector3.Lerp(ghostPos[i], ghostPos[i] + ghostVels[i] * dt, 0.8f);
+            //}
 
         }
     }
@@ -197,140 +205,41 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         List<Vector3> newpos = new List<Vector3>();
         newpos.Add(pointPos[0]);
 
-        for (int e = 0; e < ghostPos.Count()-1; e++)
+        for (int e = 0; e < ghostPos.Count(); e++)
         {
             Vector3 v1 = pointPos[e];
             Vector3 v2 = pointPos[e + 1];
-            Vector3 v3 = pointPos[e + 2];
-
             //Quaternion q = pointQ[e];
 
             Vector3 vm = 0.5f * (v1 + v2);
-            Vector3 vml = 0.5f * (v2 + v3);
 
             //Vector3 d1 = q * new Vector3(1, 0, 0); //* scale;
             //Vector3 d2 = q * new Vector3(0, 1, 0);//* scale;
             //Vector3 d3 = q * new Vector3(0, 0, 1); //* scale;
-            Vector3 d3f = (v2 - v1).normalized;
-            Vector3 d2f = Vector3.Cross((ghostPos[e] - v1),d3f).normalized;
-            Vector3 d1f = Vector3.Cross(d3f, d2f).normalized;
-            Matrix4x4 De1 = new Matrix4x4();
-            Vector3 d3l = (v3 - v2).normalized;
-            Vector3 d2l = Vector3.Cross((ghostPos[e+1] - v2),d3l).normalized;
-            Vector3 d1l = Vector3.Cross(d3l, d2l).normalized;
-            Matrix4x4 De2 = new Matrix4x4();
+            Vector3 d2 = (ghostPos[e] - vm).normalized;
+            Vector3 d1 = Vector3.Cross(vm.normalized, d2).normalized;
 
-            De1.SetColumn(0,d1f);
-            De1.SetColumn(1,d2f);
-            De1.SetColumn(2,d3f);
-            De2.SetColumn(0, d1l);
-            De2.SetColumn(1, d2l);
-            De2.SetColumn(2, d3l);
-
-            Matrix4x4 rotation = Matrix4x4.Transpose(De1) * De2;
-
-            float trace = rotation.m00 + rotation.m11 + rotation.m22;
-            float theta = Mathf.Acos((trace - 1) / 2f);
-            Vector3 n;
-
-            if (theta > 1e-6f)  // 如果 θ ≠ 0
+            //Debug.Log($"{d1} {d2} {d3}");
+            for (int j = 0; j < subdivision; ++j)
             {
-                float factor = 1f / (2f * Mathf.Sin(theta));
-                n = new Vector3(
-                    (rotation.m21 - rotation.m12) * factor,
-                    (rotation.m02 - rotation.m20) * factor,
-                    (rotation.m10 - rotation.m01) * factor
-                );
-            }
-            else
-            {
-                n = Vector3.zero;  // 如果 θ = 0，旋转轴无意义
+                float angle = 2 * math.PI * j / subdivision;
+                Vector3 vertex = v1 + radius * (math.cos(angle) * d1 + math.sin(angle) * d2);
+                newpos.Add(vertex);
             }
 
-            float le = (vml - vm).magnitude;
-            int interplor = 2;
-
-            List<Vector3> sPostion = new List<Vector3>();
-            List<float> slist= new List<float>();
-            for(int i = 0; i < interplor; i++)
+            for (int i = 0; i < 10; i++)
             {
-                float t = i / (float)(interplor - 1);
-
-                // 线性插值计算位置
-                sPostion.Add(Vector3.Lerp(vm, vml, t));
-                slist.Add((i+1)* le / interplor);
-
-            }
-
-            //下面的罗德里格斯公式可能有问题
-            List<Matrix4x4> interpolatedFrames = new List<Matrix4x4>();
-            int enumNum = interplor;
-            float segmentLength = le / (interplor - 1);
-            for (int i = 0; i < enumNum; i++)
-            {
-                // 限制弧长范围在 [0, le]
-                float s = Mathf.Clamp(i * segmentLength, 0, le);
-                float r = (s - (le / 2f)) / le;
-
-                // 确保比例 r 在 [0, 1] 范围内
-                //if (r < 0 || r > 1)
-                //{
-                //    interplor--;
-                //}
-
-                Vector3 scaledTheta = theta * n * r;
-
-                // 使用 Rodrigues 公式计算旋转矩阵
-                float cosR = Mathf.Cos(scaledTheta.magnitude);
-                float sinR = Mathf.Sin(scaledTheta.magnitude);
-                Vector3 axis = scaledTheta.normalized;
-
-                Matrix4x4 rotationInterpolated = Matrix4x4.identity;
-                rotationInterpolated.m00 = cosR + axis.x * axis.x * (1 - cosR);
-                rotationInterpolated.m01 = axis.x * axis.y * (1 - cosR) - axis.z * sinR;
-                rotationInterpolated.m02 = axis.x * axis.z * (1 - cosR) + axis.y * sinR;
-
-                rotationInterpolated.m10 = axis.y * axis.x * (1 - cosR) + axis.z * sinR;
-                rotationInterpolated.m11 = cosR + axis.y * axis.y * (1 - cosR);
-                rotationInterpolated.m12 = axis.y * axis.z * (1 - cosR) - axis.x * sinR;
-
-                rotationInterpolated.m20 = axis.z * axis.x * (1 - cosR) - axis.y * sinR;
-                rotationInterpolated.m21 = axis.z * axis.y * (1 - cosR) + axis.x * sinR;
-                rotationInterpolated.m22 = cosR + axis.z * axis.z * (1 - cosR);
-
-                // 插值材料帧
-                Matrix4x4 interpolatedFrame = rotationInterpolated * De1;
-                interpolatedFrames.Add(interpolatedFrame);
-            }
-            // -----------------------------------
-
-            //string log = "";
-            //Debug.Log("_________________________________");
-            //Debug.Log($"非插值前d1{d1f} 非插值前d2{d2f}");
-            //interpolatedFrames.ForEach(frame => log += $"插值d1:{(Vector3)frame.GetColumn(0)}插值d2:{(Vector3)frame.GetColumn(1)} ");
-            //Debug.Log(log);
-            //Debug.Log($"非插值后d1{d1l} 非插值后d2{d2l}");
-
-            //Debug.Log("_________________________________");
-
-            //for (int j = 0; j < subdivision; ++j)
-            //{
-            //    float angle = 2 * math.PI * j / subdivision;
-            //    Vector3 vertex = vm + radius * (math.cos(angle) * (Vector3)d1f.normalized + math.sin(angle) * (Vector3)d2f.normalized);
-            //    newpos.Add(vertex);
-            //}
-
-            // 将截面点存储到 allSections 中
-            List<Vector3> sectionPoints = new List<Vector3>();
-            for (int i = 1; i < interplor; i++)
-            {
-                for (int j = 0; j < subdivision; ++j)
+                if (e != pointPos.Count() - 2)
                 {
-                    float angle = 2 * math.PI * j / subdivision;
-                    Vector3 vertex = sPostion[i] + radius * (math.cos(angle) * (Vector3)interpolatedFrames[i].GetColumn(0).normalized + math.sin(angle) * (Vector3)interpolatedFrames[i].GetColumn(1).normalized);
-                    sectionPoints.Add(vertex);
-                    newpos.Add(vertex);
+                    Vector3 nd2 = (ghostPos[e + 1] - 0.5f * (pointPos[e + 1] + pointPos[e + 2])).normalized;
+                    Vector3 nd1 = Vector3.Cross(0.5f * (pointPos[e + 1] + pointPos[e + 2]), d2).normalized;
 
+                    for (int j = 0; j < subdivision; ++j)
+                    {
+                        float angle = 2 * math.PI * j / subdivision;
+                        Vector3 vertex = Vector3.Lerp(v1, v2, i * 1f/10f) + radius * (math.cos(angle) * Vector3.Lerp(d1, nd1, i * 1f/10f) + math.sin(angle) * Vector3.Lerp(d2, nd2, i * 1f / 10f));
+                        newpos.Add(vertex);
+                    }
                 }
             }
 
@@ -348,15 +257,15 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
             //    newpos.Add(vertex);
             //}
 
-            //if (e == pointPos.Count() - 2)
-            //{
-            //    for (int j = 0; j < subdivision; ++j)
-            //    {
-            //        float angle = 2 * math.PI * j / subdivision;
-            //        Vector3 vertex = pointPos.Last() + radius * (math.cos(angle) * d1 + math.sin(angle) * d2);
-            //        newpos.Add(vertex);
-            //    }
-            //}
+            if (e == pointPos.Count() - 2)
+            {
+                for (int j = 0; j < subdivision; ++j)
+                {
+                    float angle = 2 * math.PI * j / subdivision;
+                    Vector3 vertex = pointPos.Last() + radius * (math.cos(angle) * d1 + math.sin(angle) * d2);
+                    newpos.Add(vertex);
+                }
+            }
         }
 
         newpos.Add(pointPos.Last());

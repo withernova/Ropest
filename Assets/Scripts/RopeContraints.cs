@@ -95,6 +95,7 @@ public class EdgeConstraint : Constraint
     }
 }
 
+
 public class BendingAndTwistingConstraint : Constraint
 {
     int[][] permutation = new int[][]{
@@ -343,9 +344,9 @@ public class BendingAndTwistingConstraint : Constraint
     {
         Matrix4x4 newMat = new Matrix4x4();
 
-        newMat.SetColumn(0, new Vector3(0, mat.z, -mat.y));
-        newMat.SetColumn(1, new Vector3(-mat.z, 0, mat.x));
-        newMat.SetColumn(2, new Vector3(mat.y, -mat.x, 0));
+        newMat.SetColumn(0, new Vector3(0, -mat.z, mat.y));
+        newMat.SetColumn(0, new Vector3(mat.z, 0, -mat.x));
+        newMat.SetColumn(0, new Vector3(mat.y, mat.x, 0));
 
         return newMat;
     }
@@ -538,88 +539,68 @@ public class BendingAndTwistingConstraint : Constraint
     }
 }
 
-//public class TargetConstraint : Constraint
-//{
-//    RopeXPBDSolver solver;
-//    Vector3 speed;
-//    float lambda = 0f;
-//    public TargetConstraint(XPBDSolver solver) : base(solver)
-//    {
-//        this.solver = solver as RopeXPBDSolver;
-//        solver.invMass[0] /= 5; 
-//    }
 
-//    public override void SolveConstraint(float dt)
-//    {
-//        float alpha = stiff / Mathf.Pow(dt, 2);
-//        int index = 0;
-//        //获取solver的速度
-//        speed =  solver.speed;
-//        //获取index
-
-//        Vector3 gradC = - speed;//此为和真实值的差距 当前位移是0
-//        float C = gradC.magnitude;
-//        gradC = speed.normalized;
-
-//        float deltalamda = -(C + lambda* alpha)/(1 + alpha);
-//        Debug.Log(deltalamda);
-//        lambda += deltalamda;
-//        solver.pointPos[index] += speed;
-//        solver.speed = new Vector3(0, 0, 0);
-//    }
-
-//    public override void ResetLambda()
-//    {
-//        lambda = 0f;
-//        solver.speed = new Vector3(10, 0, 0);
-//    }
-//}
-
-
-public class DoubleDistanceConstraint : Constraint
+public class BendTwistConstraint : Constraint
 {
-    public RopeXPBDSolver solver;
-    float[] length;
-    const float EPSILON = 1e-6f;
-    float alpha;
-    private float[] lambdas0;
-
-    public DoubleDistanceConstraint(RopeXPBDSolver solver) : base(solver)
+    RopeXPBDSolver solver;
+    public Quaternion[] restQs;
+    public BendTwistConstraint(XPBDSolver solver) : base(solver)
     {
-        stiff = 0.1f;
-        this.solver = solver;
-        this.length = solver.length;
+        this.solver = solver as RopeXPBDSolver;
+        restQs = new Quaternion[this.solver.pointPos.Count() - 1];
 
-        ResetLambda();
+
+        for (int i = 0; i < this.solver.pointQ.Count() - 1; i++)
+        {
+            restQs[i] = CalculateDarbQ(i);
+        }
     }
 
-    public override void ResetLambda()
+
+    public Quaternion CalculateDarbQ(int i)
     {
-        lambdas0 = new float[solver.pointPos.Count()-2];
+        Quaternion restDarbouxVector = new Quaternion(solver.pointQ[i].x, solver.pointQ[i].y, solver.pointQ[i].z, -solver.pointQ[i].w) * solver.pointQ[i + 1];
+        Quaternion omega_plus, omega_minus;
+
+        omega_plus = new Quaternion(restDarbouxVector.x + 1, restDarbouxVector.y, restDarbouxVector.z, restDarbouxVector.w);
+        omega_minus = new Quaternion(restDarbouxVector.x - 1, restDarbouxVector.y, restDarbouxVector.z, restDarbouxVector.w);
+        if (SqrMagnitude(omega_minus) > SqrMagnitude(omega_plus))
+            restDarbouxVector = new Quaternion(-restDarbouxVector.x, -restDarbouxVector.y, -restDarbouxVector.z, -restDarbouxVector.w);
+        return restDarbouxVector;
+    }
+
+    public float SqrMagnitude(Quaternion quaternion)
+    {
+        return quaternion.x * quaternion.x + quaternion.y * quaternion.y + quaternion.z * quaternion.z + quaternion.w * quaternion.w;
     }
 
     public override void SolveConstraint(float dt)
     {
-        float deltaLambda;
-
-        alpha = stiff / (dt * dt);
-
-        for (int i = 0; i < solver.pointPos.Count() - 2; i++)
+        for (int i = 0; i < solver.pointQ.Count() - 1; ++i)
         {
-            Vector3 dir = solver.pointPos[i] - solver.pointPos[i + 2];
-            float len = dir.magnitude;
-            float wSum = solver.pointInvMass[i] + solver.pointInvMass[i + 2];
-            if (len > EPSILON && wSum > EPSILON)
+            Quaternion omega = new Quaternion(solver.pointQ[i].x, solver.pointQ[i].y, solver.pointQ[i].z, -solver.pointQ[i].w) * solver.pointQ[i + 1];
+
+            Quaternion omega_plus;
+            omega_plus = new Quaternion(restQs[i].x + omega.x, restQs[i].y + omega.y, restQs[i].z + omega.z, restQs[i].w + omega.w);
+            omega = new Quaternion(-restQs[i].x + omega.x, -restQs[i].y + omega.y, -restQs[i].z + omega.z, -restQs[i].w + omega.w);
+            if(SqrMagnitude(omega) > SqrMagnitude(omega_plus))
             {
-                //deltaLambda = -((len - length[i])) / (wSum) * edgeKs;
-                deltaLambda = -((len - (length[i] + length[i+1])) + alpha * lambdas0[i]) / (wSum + alpha) * stiff;
-
-                Vector3 dP = deltaLambda * (dir / len);
-                solver.pointPos[i] += dP * solver.pointInvMass[i];
-                solver.pointPos[i + 2] -= dP * solver.pointInvMass[i + 2];
-
-                lambdas0[i] += deltaLambda;
+                omega = omega_plus;
             }
+
+            for (int j = 0; j < 3; j++) omega[j] *= stiff / (solver.invMass[i] + solver.invMass[i + 1] + (1.0e-6f));
+            omega.w = 0.0f;    //discrete Darboux vector does not have vanishing scalar part
+
+            solver.pointQ[i] *= new Quaternion(omega.x * solver.invMass[i], omega.y * solver.invMass[i], omega.z * solver.invMass[i], omega.w * solver.invMass[i]);
+            solver.pointQ[i + 1] *= new Quaternion(omega.x * solver.invMass[i + 1], omega.y * solver.invMass[i + 1], omega.z * solver.invMass[i + 1], omega.w * solver.invMass[i + 1]);
+
+            solver.pointQ[i].Normalize();
+            solver.pointQ[i + 1].Normalize();
         }
+    }
+
+    public override void ResetLambda()
+    {
+
     }
 }
