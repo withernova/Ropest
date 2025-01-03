@@ -43,7 +43,7 @@ public class Rope : MonoBehaviour
     {
         solver = new RopeXPBDSolver();
         solver.InitByMesh(ropeMesh, gravity, new RopeSolverInitData(subdivision, segments));
-        controlPoint.ctrl = solver;
+        //controlPoint.ctrl = solver;
         ready = true;
         yield break;
     }
@@ -94,7 +94,7 @@ public class Rope : MonoBehaviour
         if (ready)
         {            
             UpdateMesh();
-            controlPoint.transform.localPosition = solver.pointPos[solver.ctrlIndex];
+            //controlPoint.transform.localPosition = solver.pointPos[solver.ctrlIndex];
             for (var index = 0; index < solver.pointPos.Length; index++)
             {
                 solver.direcN[index] = Vector3.zero;
