@@ -4,7 +4,7 @@ using NUnit.Framework;
 using UnityEngine;
 
 public class PlayerController : MonoBehaviour
-{ 
+{
     public CinemachineFreeLook freeLookCamera;
     private SphereCollider groundCheckCollider;
     private float speed = 5f;
@@ -32,9 +32,9 @@ public class PlayerController : MonoBehaviour
             if (Input.GetKeyDown(KeyCode.E))
             {
                 InteractiveGrab interactive = caster.TriggerInteractiveUndeploy<InteractiveGrab>();
+                Debug.Log(interactive);
                 if (interactive != null)
                 {
-                    Debug.Log("a");
                     ctrl.Grab(interactive);
                 }
             }
