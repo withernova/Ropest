@@ -201,6 +201,20 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         pointPos[grabPoint] = trans.InverseTransformPoint(grabPos);
     }
 
+    private Vector3 enforceMove; 
+    public void Hang(Vector3 target)
+    {
+        
+    }
+
+    public void Grab(Vector3 target)
+    {
+        //先设置更新的位移
+        
+        //然后设置质量
+
+        //然后时刻保持速度相同
+    }
 
 
     //public override void StartGrab(Vector3 grabPos, Transform trans)
