@@ -15,7 +15,7 @@ public class EdgeConstraint : Constraint
 
     public EdgeConstraint(RopeXPBDSolver solver) : base(solver)
     {
-        stiff = 0.001f;
+        stiff = 0.00f;
         this.solver = solver;
         this.length = solver.length;
 
