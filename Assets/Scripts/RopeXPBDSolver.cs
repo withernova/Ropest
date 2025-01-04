@@ -93,6 +93,12 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         ghostInvMass = Enumerable.Repeat(m, pointPos.Count() - 1).ToArray();
         pointInvMass = Enumerable.Repeat(m, pointPos.Count()).ToArray();
         for (int i = 0; i < pointPos.Count(); i++)
+        {
+            pointInvMass[i] = i + 1;
+            if(i != pointPos.Count() - 1)
+                ghostInvMass[i] = i + 1;
+        }
+        for (int i = 0; i < pointPos.Count(); i++)
             new PointData(m);
 
         length = new float[ghostPos.Count()];
@@ -116,11 +122,10 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
             //}
             //v = (x - xPrev) / dt
             
-            Vector3 tempPos = pointPos[i];
             
-            float f = -0.01f * invMass[i];
+            float f = -0.01f * pointInvMass[i];
             Vector3 deltaPos_G = 1f / 2 * dt * dt * gravity;
-            Vector3 deltaPos_f = 1f / 2 * 0 * dt * dt * (pos[i] - prevPos[i]).normalized;
+            Vector3 deltaPos_f = 1f / 2 * 0 * dt * dt * (pointPos[i] - prevPos[i]).normalized;
             pointPos[i] += deltaPos_f + deltaPos_G;
             if (i == ctrlIndex)
                 pointPos[i] += move;
@@ -191,7 +196,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         forces.Clear();
         for (int i = 0; i < pointPos.Count(); i++)
         {
-            if (invMass[i] == 0f)
+            if (pointInvMass[i] == 0f)
             {
                 prevPos[i] = pointPos[i];
                 continue;

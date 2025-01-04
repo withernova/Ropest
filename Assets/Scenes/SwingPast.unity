@@ -1714,6 +1714,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   freeLookCamera: {fileID: 1615549834}
+  caster: {fileID: 0}
 --- !u!1 &1525131346
 GameObject:
   m_ObjectHideFlags: 0
@@ -1746,7 +1747,7 @@ MonoBehaviour:
   gravity: {x: 0, y: -9.8, z: 0}
   simulate: 1
   length: 1
-  segments: 35
+  segments: 12
   subdivision: 5
   thickness: 1
   meshOrigin: {x: 0, y: 1, z: 0}
