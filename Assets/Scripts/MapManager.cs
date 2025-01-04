@@ -22,8 +22,10 @@ public class MapManager : MonoBehaviour
         maps = new List<string>()
         {
             "Levels/BarChanllenge",
-            "Levels/RowChanllenge",
-            "Levels/Level3",
+            //"Levels/RowChanllenge",
+            //"Levels/Level3",
+            "Levels/CubeChanllenge",
+            "Levels/CubeChanllenge2",
         };
 
         for (int i = 0; i < 3; i++)
@@ -41,24 +43,21 @@ public class MapManager : MonoBehaviour
         } while (previousMap.Any(map => map.id == id));
 
         string path = maps[id];
-        GameObject map = ResourcesPool.Instance.Load(path, 10);
+        GameObject map = ResourcesPool.Instance.Load(path, 2);
       
         LevelMap levelMap = map.GetComponent<LevelMap>();
         //TODO: 详细时间实现
-        levelMap.Init(id, Random.Range(1,10));
-
-        if(previousMap.Count > 0) { 
+        if (previousMap.Count > 0)
+        {
             levelMap.SetBeginningPos(previousMap.Last().GetLasPos().x);
         }
+        levelMap.Init(id, Random.Range(1,10));
+        
         previousMap.Add(levelMap);
     }
 
     public void DropMap(LevelMap map)
     {
-        if(map != previousMap.First())
-        {
-            DropMap(previousMap.First());
-        }
         map.droped = true;
         previousMap.Remove(map);
         while (previousMap.Count() < 3)

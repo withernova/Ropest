@@ -2,6 +2,7 @@ using DG.Tweening;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using UnityEngine;
 
 
@@ -12,13 +13,15 @@ public class LevelMap : MonoBehaviour
     public Timer dropMapCountDown;
     public bool droped;
 
-    public void Init(int i, int lastTime)
+    public virtual void Init(int i, int lastTime)
     {
         id = i;
         time = lastTime;
+        dropMapCountDown?.Stop();
         dropMapCountDown = TimerManager.instance.CreateTimer(lastTime, 1, () => MapManager.Instance.DropMap(this));
         droped = false;
         transform.position = new Vector3(transform.position.x, 0);
+        GetComponentsInChildren<InteractiveBase>().ToList().ForEach(inter => inter.EndInteractive());
     }
 
     public Vector3 GetLasPos()

@@ -47,8 +47,8 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
 
     protected override void AddConstraints()
     {
-        m_constraints.Add(new EdgeConstraint(this));
         m_constraints.Add(new BendingAndTwistingConstraint(this));
+        m_constraints.Add(new EdgeConstraint(this));
         //m_constraints.Add(new BendTwistConstraint(this));
     }
 
