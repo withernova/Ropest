@@ -51,7 +51,6 @@ public class InteractiveCaster : MonoBehaviour
         
         var a = Physics.OverlapSphere(transform.position, interactiveRadios, interactiveLayerMask);
 
-
         var inCondition = a.ToList().Where(item => null != item.GetComponent<InteractiveBase>() && !(null != condition && !condition.Invoke(item.GetComponent<InteractiveBase>())));
         var res = inCondition.Where(item => (transform.position - item.transform.position).magnitude == a.Min(item => (transform.position - item.transform.position).magnitude));
 

@@ -18,6 +18,7 @@ public class PlayerController : MonoBehaviour
         freeLookCamera.Follow = transform;
         freeLookCamera.LookAt = transform;
         caster = GetComponent<InteractiveCaster>();
+
         //groundCheckCollider = GetComponent<SphereCollider>();
     }
 
@@ -47,6 +48,7 @@ public class PlayerController : MonoBehaviour
         //         move += jumpSpeed * Vector3.up;
         //     }
         // }
+
 
 
         
