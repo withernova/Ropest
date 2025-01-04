@@ -14,6 +14,20 @@ public class PointData
     public PointData(float ori)
     {
         originMass = ori;
+        PointData.datas.Add(this);
+    }
+
+    public void SetActive(InteractiveBase baseI)
+    {
+        interactiveItem = baseI;
+        isActivating = true;
+    }
+    public float Reset()
+    {
+        this.interactiveItem.EndInteractive();
+        this.interactiveItem = null;
+        this.isActivating = false;
+        return originMass;
     }
 
     public static List<PointData> datas;

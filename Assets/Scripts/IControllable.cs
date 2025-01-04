@@ -7,4 +7,6 @@ public interface IControllable
     public void Swing(InteractiveSwing target);
 
     public void Grab(InteractiveGrab target);
+
+    public void LoseControl();
 }

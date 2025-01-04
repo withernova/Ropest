@@ -2,6 +2,7 @@ using NUnit.Framework;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Xml.Serialization;
 using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -62,6 +63,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         RopeSolverInitData ropeData = data as RopeSolverInitData;
         subdivision = ropeData.subdivision;
 
+
         collisions = new List<KeyValuePair<int,Vector3>>();
 
         var sectionList = new List<int[]>();
@@ -95,8 +97,11 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         }
         ghostPrev = ghostPos;
 
-        ghostInvMass = Enumerable.Repeat(1f, pointPos.Count() - 1).ToArray();
-        pointInvMass = Enumerable.Repeat(1f, pointPos.Count()).ToArray();
+        float m = 1f;
+        ghostInvMass = Enumerable.Repeat(m, pointPos.Count() - 1).ToArray();
+        pointInvMass = Enumerable.Repeat(m, pointPos.Count()).ToArray();
+        for (int i = 0; i < pointPos.Count(); i++)
+            new PointData(m);
 
         length = new float[ghostPos.Count()];
         for (int i = 0; i < ghostPos.Count(); i++)
@@ -252,29 +257,34 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
             pointPos[ctrlIndex] += enforceMove;
             enforceMove = new Vector3();
         }
-        foreach(var data in PointData.GetAllActivated())
+        for(int i=0;i<PointData.datas.Count;i++)
         {
-            data.interactiveItem.Set(vel[i]);
+            var data = PointData.datas[i]; 
+            if (data.interactiveItem is InteractiveGrab)
+                ((InteractiveGrab)data.interactiveItem).SetV(vel[i]) ;
         }
     }
     
-    public void Swing(InteractiveBase target)
+    public void Swing(InteractiveSwing target)
     {
-        enforceMove = target.transform.position - pointPos[ctrlIndex];
-
-        //
+        enforceMove = target.GetTargetPos(pointPos[ctrlIndex]);
+        PointData.datas[ctrlIndex].SetActive(target);
     }
 
-    public void Grab(InteractiveBase target)
+    public void Grab(InteractiveGrab target)
     {
+        PointData.datas[ctrlIndex].SetActive(target);
+
         //先设置更新的位移
         enforceMove = target.transform.position - pointPos[ctrlIndex];
 
         //然后设置质量
-        invMass[ctrlIndex] += target.GetMass();
-        
-        //然后时刻保持速度相同
-        
+        invMass[ctrlIndex] += target.GetMass(); 
+    }
+
+    public void LoseControl()
+    {
+        invMass[ctrlIndex] = PointData.datas[ctrlIndex].Reset();
     }
 
 
