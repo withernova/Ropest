@@ -6,8 +6,8 @@ using UnityEngine;
 
 public class PlayerControllerByForce : MonoBehaviour
 {
-    public Transform curTrans; // µ±Ç°²Ù×İĞ¡½ÚµÄÎ»ÖÃ ×îºÃÔÚropeĞ´¸ö½Ó¿ÚºÃµã¶ù
-    public int curSectionIndex = 0;// µ±Ç°²Ù×İĞ¡½ÚµÄÏÂ±ê
+    public Transform curTrans; // å½“å‰æ“çºµå°èŠ‚çš„ä½ç½® æœ€å¥½åœ¨ropeå†™ä¸ªæ¥å£å¥½ç‚¹å„¿
+    public int curSectionIndex = 0;// å½“å‰æ“çºµå°èŠ‚çš„ä¸‹æ ‡
     public float detectRaius = 10f;
     public Camera mainCamera;
 
@@ -33,7 +33,7 @@ public class PlayerControllerByForce : MonoBehaviour
         float vertical = 0f;
         horizontal = Input.GetAxis("Horizontal");
         vertical = Input.GetAxis("Vertical");
-        //force += new Vector3()£»
+        //force += new Vector3()ï¼›
         Vector3 front = mainCamera.transform.forward;
         Vector3 right = mainCamera.transform.right;
         front.y = 0f;
@@ -41,7 +41,7 @@ public class PlayerControllerByForce : MonoBehaviour
         front.Normalize();
         right.Normalize();
         force = front * vertical + right * horizontal;
-        //Debug.Log($"Õâ¾ÍÊÇÁ¦Á¿{force}");
+        //Debug.Log($"è¿™å°±æ˜¯åŠ›é‡{force}");
         rope.solver.AddForce(curSectionIndex,force * 10);
 
         var hangables = DetectInteractItem<Hangabletem>(rope.transform.TransformPoint(rope.solver.pointPos[0]));
@@ -83,7 +83,7 @@ public class PlayerControllerByForce : MonoBehaviour
     {
         Vector3 target = item.GetTargetPos(oriPos);
 
-        // TODO£º×ÜÖ®×ö¸öÒÆ¶¯¶¯»­°É ÏÂÃæµÄĞ­³ÌÀïÃæĞ´
+        // TODOï¼šæ€»ä¹‹åšä¸ªç§»åŠ¨åŠ¨ç”»å§ ä¸‹é¢çš„åç¨‹é‡Œé¢å†™
         StartCoroutine(MoveTowards(target,1f));
         
     }
@@ -102,13 +102,13 @@ public class PlayerControllerByForce : MonoBehaviour
 
     public List<KeyValuePair<T, float>> DetectInteractItem<T>(Vector3 oriPos) where T : Component
     {
-        //·µ»Ø¼ì²âÊÇ·ñÅöµÃµ½¿É×¥»ñµÄÎïÌå Í¨¹ılayermask
+        //è¿”å›æ£€æµ‹æ˜¯å¦ç¢°å¾—åˆ°å¯æŠ“è·çš„ç‰©ä½“ é€šè¿‡layermask
 
         List<KeyValuePair<T, float>> items = new List<KeyValuePair<T, float>>();
 
         foreach (var collider in Physics.OverlapSphere(oriPos, detectRaius))
         {
-            // TODO ·µ»ØÊ±ĞèÒªÔÚÆÁÄ»ÉÏ¸ø³öÌáÊ¾ ²¢¸ù¾İÆÁÄ»·½Ïò ÏÔÊ¾×î½üÇÒ¿ÉÑ¡ÖĞµÄÄ¿±ê ¹¹½¨ÔÚÁĞ±íÄÚ
+            // TODO è¿”å›æ—¶éœ€è¦åœ¨å±å¹•ä¸Šç»™å‡ºæç¤º å¹¶æ ¹æ®å±å¹•æ–¹å‘ æ˜¾ç¤ºæœ€è¿‘ä¸”å¯é€‰ä¸­çš„ç›®æ ‡ æ„å»ºåœ¨åˆ—è¡¨å†…
 
             var component = collider.GetComponent<T>();
             if (component != null)

@@ -118,15 +118,68 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
             //    continue;
             //}
             //v = (x - xPrev) / dt
-
             
-
-            if (i < pointPos.Count() - 1)
+            float f = -0.01f * invMass[i];
+            Vector3 deltaPos_G = 1f / 2 * dt * dt * gravity;
+            Vector3 deltaPos_f = 1f / 2 * 0 * dt * dt * (pos[i] - prevPos[i]).normalized;
+            pointPos[i] += deltaPos_f + deltaPos_G;
+            if (i == ctrlIndex)
+                pointPos[i] += move;
+            
+            // 用n帧的预测位置和n-1帧的实际位置得到n帧的预测速度
+            vel[i] = (pointPos[i] - prevPos[i]) * oneOverdt;
+            
+            direcN[i] = Vector3.zero;
+            foreach (var collider in Physics.OverlapSphere(pointPos[i], 0.01f))
             {
+                // TODO: 添加排除自己的碰撞体
+                if (collider.isTrigger) continue;
 
-                ghostVels[i] = oneOverdt *(ghostPos[i] - ghostPrev[i]);
+                if (collider is SphereCollider)
+                {
+                    direcN[i] += pointPos[i] - collider.transform.position;
+                }
+
+                if (collider is BoxCollider)
+                {
+                    Physics.Raycast(pointPos[i], collider.ClosestPoint(pointPos[i]) - pointPos[i], out RaycastHit info);
+                    Vector3 d0 = info.normal;
+                    var colliderTransform = collider.transform;
+                    Vector3[] dVectors = new[]
+                    {
+                        colliderTransform.up, -colliderTransform.up,
+                        colliderTransform.forward, -colliderTransform.forward,
+                        colliderTransform.right, -colliderTransform.right
+                    };
+                    float maxDotProduct = -1f; // 因为点乘值可能是负数，初始化为-1
+                    Vector3 closestVector = Vector3.zero;
+                    foreach (Vector3 di in dVectors)
+                    {
+                        float dotProduct = Vector3.Dot(d0.normalized, di.normalized); // 计算点乘（归一化以比较方向）
+
+                        // 找到点乘值最接近1的向量
+                        if (dotProduct > maxDotProduct)
+                        {
+                            maxDotProduct = dotProduct;
+                            closestVector = di;
+                        }
+                    }
+                    d0 = closestVector;
+                    direcN[i] += d0;
+                }
+
+                
             }
-            vel[i] = oneOverdt * (pointPos[i] - prevPos[i]);
+            direcN[i] = direcN[i].normalized;
+            vel[i] += Mathf.Clamp(-Vector3.Dot(vel[i], direcN[i]), 0, Mathf.Infinity) * direcN[i];
+            pointPos[i] = prevPos[i] + vel[i] * dt;
+
+            // 往前对于pointPos的更新是改变n帧的预测位置
+            
+            if (i < pointPos.Count() - 1)
+                ghostVels[i] = (ghostPos[i] - ghostPrev[i]) * oneOverdt;
+            
+            // 往后pointPos是第n帧的实际位置
         }
     }
 
@@ -140,13 +193,13 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         forces.Clear();
         for (int i = 0; i < pointPos.Count(); i++)
         {
-            //if (invMass[i] == 0f)
-            //{
-            //    prevPos[i] = pointPos[i];
-            //    continue;
-            //}
-
-
+            if (invMass[i] == 0f)
+            {
+                prevPos[i] = pointPos[i];
+                continue;
+            }
+            
+            
             //if (i == 0 || i == pointPos.Count() - 1)
             //{
             //    pointPos[i] = prevPos[i];
@@ -154,32 +207,19 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
             //}
             //vel[i] += g * dt;
 
-
-            float f = -0.9f * invMass[i];
-            //Vector3 deltaVel = Vector3.zero;
-            //Vector3 deltaVel_G = dt * gravity;
-            Vector3 deltaVel_f = dt * f * (vel[i]).normalized;
-            //vel[i] += deltaVel_f + deltaVel_G;
-            //ghostVels[i] += deltaVel_f + deltaVel_G;
-            //if (i == ctrlIndex)
-            //{
-            //    vel[i] += move * oneOverdt;
-            //    ghostVels[i] += move * oneOverdt;
-            //}
-            //direcN[i] = direcN[i].normalized;
-            //Vector3 collisionDeltaVel = Mathf.Clamp(-Vector3.Dot(vel[i], direcN[i]), 0, Mathf.Infinity) * direcN[i];
-            //vel[i] += collisionDeltaVel;
-            //deltaVel += deltaVel_f + deltaVel_G + collisionDeltaVel;
-
+            
+            // n+1帧：往前的pointpos是第n帧的实际位置
+            
             prevPos[i] = pointPos[i];
-            pointPos[i] +=  vel[i] * dt + dt * new Vector3(0,-0.09f,0) + dt * deltaVel_f;
+            pointPos[i] += vel[i] * dt;
+            
             //pointPos[i] = Vector3.Lerp(pointPos[i], pointPos[i] + vel[i] * dt, 0.8f);
 
             if (i < pointPos.Count() - 1)
             {
 
                 ghostPrev[i] = ghostPos[i];
-                ghostPos[i] += ghostVels[i] * dt + dt * new Vector3(0, -0.09f, 0);
+                ghostPos[i] += ghostVels[i] * dt;
             }
 
         }

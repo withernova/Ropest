@@ -116,6 +116,20 @@ public class Rope : MonoBehaviour
         }
         if (!simulate || !ready)
             return;
+        controlPoint.transform.localPosition = solver.pointPos[solver.ctrlIndex];
+        // for (var index = 0; index < solver.pointPos.Length; index++)
+        // {
+        //     solver.direcN[index] = Vector3.zero;
+        //     var localVertex = solver.pointPos[index];
+        //     Vector3 worldVertex = transform.TransformPoint(localVertex);
+        //     foreach (var collider in Physics.OverlapSphere(worldVertex, 0.05f))
+        //     {
+        //         if (collider.gameObject == gameObject || collider.isTrigger) continue;
+        //
+        //         Physics.Raycast(worldVertex, collider.ClosestPoint(worldVertex) - worldVertex, out RaycastHit info);
+        //         solver.direcN[index] += info.normal;
+        //     }
+        // }
         solver.Simulate(Time.fixedDeltaTime);
         
     }
@@ -139,8 +153,8 @@ public class Rope : MonoBehaviour
             {
                 float angle = j * angleIncrement;
                 float x = point.x;
-                float y = Mathf.Cos(angle) * radius;
-                float z = Mathf.Sin(angle) * radius;
+                float y = point.y + Mathf.Cos(angle) * radius;
+                float z = point.z + Mathf.Sin(angle) * radius;
                 vertices.Add(new Vector3(x, y, z));
             }
             if (i == seg)

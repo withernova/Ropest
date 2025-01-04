@@ -1,13 +1,15 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public enum InteractiveType
 {
     Contact, //接触持续
     Trigger, //手动触发
-    Last //停留触发
+    Last, //停留触发
+    UnDeploy //不负责触发逻辑
 }
 
 public class InteractiveCaster : MonoBehaviour
@@ -49,33 +51,39 @@ public class InteractiveCaster : MonoBehaviour
         
         var a = Physics.OverlapSphere(transform.position, interactiveRadios, interactiveLayerMask);
 
-        foreach (var iTarget in a)
-        {
-            var interObj = iTarget.GetComponent<InteractiveBase>();
-            if (null != interObj)
-            {
-                if (null != condition && !condition.Invoke(interObj)) continue;
-                iTarget.GetComponent<InteractiveBase>().OnStart();
-            }
-        }
+
+        var inCondition = a.ToList().Where(item => null != item.GetComponent<InteractiveBase>() && !(null != condition && !condition.Invoke(item.GetComponent<InteractiveBase>())));
+        var res = inCondition.Where(item => (transform.position - item.transform.position).magnitude == a.Min(item => (transform.position - item.transform.position).magnitude));
+
+        res.First().GetComponent<InteractiveBase>().OnStart();
 
         inCD = true;
         tickCD.Start();
+    }
+
+    public InteractiveBase TriggerInteractiveUndeploy()
+    {
+        if (inCD) return null;
+
+        var a = Physics.OverlapSphere(transform.position, interactiveRadios, interactiveLayerMask);
+
+        var inCondition = a.ToList().Where(item => null != item.GetComponent<InteractiveBase>() && !(null != condition && !condition.Invoke(item.GetComponent<InteractiveBase>())));
+        var res = inCondition.Where(item => (transform.position - item.transform.position).magnitude == a.Min(item => (transform.position - item.transform.position).magnitude));
+
+        inCD = true;
+        tickCD.Start();
+
+        return res.First().GetComponent<InteractiveBase>();
     }
 
     public void ConstantInteractive(float deltaTime)
     {
         var a = Physics.OverlapSphere(transform.position, interactiveRadios, interactiveLayerMask);
 
-        foreach (var iTarget in a)
-        {
-            var interObj = iTarget.GetComponent<InteractiveBase>();
-            if (null != interObj)
-            {
-                if (null != condition && !condition.Invoke(interObj)) continue;
-                interObj.OnUpdate(deltaTime);
-            }
-        }
+        var inCondition = a.ToList().Where(item => null != item.GetComponent<InteractiveBase>() && !(null != condition && !condition.Invoke(item.GetComponent<InteractiveBase>())));
+        var res = inCondition.Where(item => (transform.position - item.transform.position).magnitude == a.Min(item => (transform.position - item.transform.position).magnitude));
+
+        res.First().GetComponent<InteractiveBase>().OnUpdate(deltaTime);
     }
 
     public void LastInteractive()
