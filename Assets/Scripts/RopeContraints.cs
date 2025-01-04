@@ -65,9 +65,9 @@ public class EdgeConstraint : Constraint
                 deltaLambda = -(Vector3.Dot(p2pm, p1p0) + alpha * lambdas1[i]) / (wSum + alpha);
                 //deltaLambda = -(Vector3.Dot(p2pm, p1p0)) / (wSum) * edgeKs;
 
-                solver.pointPos[i] += p0p2 * deltaLambda * solver.pointInvMass[i];
-                solver.pointPos[i + 1] += p2p1 * deltaLambda * solver.pointInvMass[i + 1];
-                solver.ghostPos[i] += p1p0 * deltaLambda * solver.ghostInvMass[i];
+                solver.pointPos[i] += p0p2.normalized * deltaLambda * solver.pointInvMass[i];
+                solver.pointPos[i + 1] += p2p1.normalized * deltaLambda * solver.pointInvMass[i + 1];
+                solver.ghostPos[i] += p1p0.normalized * deltaLambda * solver.ghostInvMass[i];
 
                 lambdas1[i] += deltaLambda;
             }
