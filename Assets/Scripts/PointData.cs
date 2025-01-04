@@ -30,7 +30,7 @@ public class PointData
         return originMass;
     }
 
-    public static List<PointData> datas;
+    public static List<PointData> datas = new List<PointData>();
 
     public static List<PointData> GetAllActivated()
     {

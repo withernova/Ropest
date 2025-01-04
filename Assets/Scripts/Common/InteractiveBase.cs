@@ -6,6 +6,7 @@ using UnityEngine.Events;
 public abstract class InteractiveBase : MonoBehaviour
 {
     public float lastingTime;
+    public float radius;
     public UnityAction OnInteractive;
     public abstract void OnStart();
     public abstract void OnUpdate(float deltaTime);

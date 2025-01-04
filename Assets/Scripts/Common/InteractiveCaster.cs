@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using static UnityEditor.Progress;
 
 public enum InteractiveType
 {
@@ -53,6 +54,7 @@ public class InteractiveCaster : MonoBehaviour
 
         var inCondition = a.ToList().Where(item => null != item.GetComponent<InteractiveBase>() && !(null != condition && !condition.Invoke(item.GetComponent<InteractiveBase>())));
         var res = inCondition.Where(item => (transform.position - item.transform.position).magnitude == a.Min(item => (transform.position - item.transform.position).magnitude));
+        
 
         res.First().GetComponent<InteractiveBase>().OnStart();
 
@@ -64,15 +66,19 @@ public class InteractiveCaster : MonoBehaviour
     {
         if (inCD) return null;
 
-        var a = Physics.OverlapSphere(transform.position, interactiveRadios, interactiveLayerMask);
+        var a = Physics.OverlapSphere(transform.position, interactiveRadios, interactiveLayerMask, QueryTriggerInteraction.Collide);
 
         var inCondition = a.ToList().Where(item => null != item.GetComponent<T>() && !(null != condition && !condition.Invoke(item.GetComponent<T>())));
         var res = inCondition.Where(item => (transform.position - item.transform.position).magnitude == a.Min(item => (transform.position - item.transform.position).magnitude));
 
-        inCD = true;
-        tickCD.Start();
+        if(res.Count() > 0 && (transform.position - res.First().transform.position).magnitude < res.First().GetComponent<InteractiveBase>().radius)
+        {
+            inCD = true;
+            tickCD.Start();
+            return res.First().GetComponent<T>();
+        }
 
-        return res.First().GetComponent<T>();
+        return null;
     }
 
     public void ConstantInteractive(float deltaTime)

@@ -24,7 +24,29 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
-        
+        //// 抓取等
+        if (ctrl != null)
+        {
+            //Transform transform;
+
+            if (Input.GetKeyDown(KeyCode.E))
+            {
+                InteractiveGrab interactive = caster.TriggerInteractiveUndeploy<InteractiveGrab>();
+                if (interactive != null)
+                {
+                    Debug.Log("a");
+                    ctrl.Grab(interactive);
+                }
+            }
+
+            if (Input.GetKeyDown(KeyCode.Q))
+            {
+                InteractiveSwing interactive = caster.TriggerInteractiveUndeploy<InteractiveSwing>();
+                Debug.Log(interactive);
+                if (interactive != null)
+                    ctrl.Swing(interactive);
+            }
+        }
     }
 
     private void FixedUpdate()
@@ -48,27 +70,6 @@ public class PlayerController : MonoBehaviour
         //         move += jumpSpeed * Vector3.up;
         //     }
         // }
-
-
-
-
-        //// 抓取等
-        if (ctrl != null)
-        {
-            //Transform transform;
-            
-            if (Input.GetKeyDown(KeyCode.E))
-            {
-                InteractiveGrab interactive = caster.TriggerInteractiveUndeploy<InteractiveGrab>();
-                ctrl.Grab(interactive);
-            }
-
-            if (Input.GetKeyDown(KeyCode.Q))
-            {
-                InteractiveSwing interactive = caster.TriggerInteractiveUndeploy<InteractiveSwing>();
-                ctrl.Swing(interactive);
-            }
-        }
 
 
 

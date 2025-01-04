@@ -201,6 +201,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         {
             if (invMass[i] == 0f)
             {
+                Debug.Log("");
                 prevPos[i] = pointPos[i];
                 continue;
             }
@@ -267,24 +268,27 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
     
     public void Swing(InteractiveSwing target)
     {
+        Debug.Log("swing");
         enforceMove = target.GetTargetPos(pointPos[ctrlIndex]);
         PointData.datas[ctrlIndex].SetActive(target);
+        pointInvMass[ctrlIndex] = 0;
     }
 
     public void Grab(InteractiveGrab target)
     {
+        Debug.Log("grab");
         PointData.datas[ctrlIndex].SetActive(target);
 
         //先设置更新的位移
         enforceMove = target.transform.position - pointPos[ctrlIndex];
 
         //然后设置质量
-        invMass[ctrlIndex] += target.GetMass(); 
+        pointInvMass[ctrlIndex] += target.GetMass(); 
     }
 
     public void LoseControl()
     {
-        invMass[ctrlIndex] = PointData.datas[ctrlIndex].Reset();
+        pointInvMass[ctrlIndex] = PointData.datas[ctrlIndex].Reset();
     }
 
 
