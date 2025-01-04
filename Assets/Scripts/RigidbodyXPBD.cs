@@ -7,6 +7,7 @@ public class RigidbodyXPBD : MonoBehaviour
 {
     public Vector3 linearVelocity;
     private Rigidbody rb;
+    public float rbM = 1f; 
     private void Start()
     {
         rb = GetComponent<Rigidbody>();

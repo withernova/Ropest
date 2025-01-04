@@ -178,8 +178,9 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
             
             if (i < pointPos.Count() - 1)
                 ghostVels[i] = (ghostPos[i] - ghostPrev[i]) * oneOverdt;
-            
-            // 往后pointPos是第n帧的实际位置
+
+            Enforce();
+
         }
     }
 
@@ -241,19 +242,39 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         pointPos[grabPoint] = trans.InverseTransformPoint(grabPos);
     }
 
-    private Vector3 enforceMove; 
-    public void Hang(Vector3 target)
+    
+    private Vector3 enforceMove = new Vector3();
+   
+    public void Enforce()
     {
-        
+        if (enforceMove.magnitude > 1e-6f)
+        {
+            pointPos[ctrlIndex] += enforceMove;
+            enforceMove = new Vector3();
+        }
+        foreach(var data in PointData.GetAllActivated())
+        {
+            data.interactiveItem.Set(vel[i]);
+        }
+    }
+    
+    public void Swing(InteractiveBase target)
+    {
+        enforceMove = target.transform.position - pointPos[ctrlIndex];
+
+        //
     }
 
-    public void Grab(Vector3 target)
+    public void Grab(InteractiveBase target)
     {
         //先设置更新的位移
-        
-        //然后设置质量
+        enforceMove = target.transform.position - pointPos[ctrlIndex];
 
+        //然后设置质量
+        invMass[ctrlIndex] += target.GetMass();
+        
         //然后时刻保持速度相同
+        
     }
 
 
