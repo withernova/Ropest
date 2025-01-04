@@ -100,20 +100,6 @@ public class Rope : MonoBehaviour
     // 计算和模拟
     public void FixedUpdate()
     {
-        for (var index = 0; index < solver.pointPos.Length; index++)
-        {
-            var localVertex = solver.pointPos[index];
-            Vector3 worldVertex = transform.TransformPoint(localVertex);
-            foreach (var collider in Physics.OverlapSphere(worldVertex, 0.1f))
-            {
-                if (collider.gameObject == gameObject || collider.isTrigger) continue;
-
-                Physics.Raycast(worldVertex, collider.ClosestPoint(worldVertex) - worldVertex, out RaycastHit info);
-                solver.collisions.Add(new(index, transform.InverseTransformPoint(info.point) - localVertex));
-                Debug.DrawLine(worldVertex, info.point);
-                //Debug.Log(info.point);
-            }
-        }
         if (!simulate || !ready)
             return;
         controlPoint.transform.localPosition = solver.pointPos[solver.ctrlIndex];

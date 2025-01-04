@@ -25,8 +25,6 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
     public Vector3[] ghostPrev;
     public Vector3[] ghostVels;
 
-    public List<KeyValuePair<int,Vector3>> collisions;
-
 
     public float[] ghostInvMass;
     public float[] pointInvMass;
@@ -41,8 +39,6 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
     public int ctrlIndex = 0;
 
     private Vector3 move;
-
-    public Vector3[] collisionV;
     
     public void SetMove(Vector3 move)
     {
@@ -51,7 +47,6 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
 
     protected override void AddConstraints()
     {
-        m_constraints.Add(new RopeCollisionConstraint(this));
         m_constraints.Add(new EdgeConstraint(this));
         m_constraints.Add(new BendingAndTwistingConstraint(this));
         //m_constraints.Add(new BendTwistConstraint(this));
@@ -62,9 +57,6 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         numSubSteps = 10;
         RopeSolverInitData ropeData = data as RopeSolverInitData;
         subdivision = ropeData.subdivision;
-
-
-        collisions = new List<KeyValuePair<int,Vector3>>();
 
         var sectionList = new List<int[]>();
         var points = new List<Vector3>();
@@ -124,6 +116,8 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
             //}
             //v = (x - xPrev) / dt
             
+            Vector3 tempPos = pointPos[i];
+            
             float f = -0.01f * invMass[i];
             Vector3 deltaPos_G = 1f / 2 * dt * dt * gravity;
             Vector3 deltaPos_f = 1f / 2 * 0 * dt * dt * (pos[i] - prevPos[i]).normalized;
@@ -135,48 +129,48 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
             vel[i] = (pointPos[i] - prevPos[i]) * oneOverdt;
             
             direcN[i] = Vector3.zero;
-            foreach (var collider in Physics.OverlapSphere(pointPos[i], 0.01f))
+            foreach (var collider in Physics.OverlapCapsule(prevPos[i],pointPos[i], 0.03f))
             {
                 // TODO: 添加排除自己的碰撞体
                 if (collider.isTrigger) continue;
-
-                if (collider is SphereCollider)
-                {
-                    direcN[i] += pointPos[i] - collider.transform.position;
-                }
-
-                if (collider is BoxCollider)
-                {
-                    Physics.Raycast(pointPos[i], collider.ClosestPoint(pointPos[i]) - pointPos[i], out RaycastHit info);
-                    Vector3 d0 = info.normal;
-                    var colliderTransform = collider.transform;
-                    Vector3[] dVectors = new[]
-                    {
-                        colliderTransform.up, -colliderTransform.up,
-                        colliderTransform.forward, -colliderTransform.forward,
-                        colliderTransform.right, -colliderTransform.right
-                    };
-                    float maxDotProduct = -1f; // 因为点乘值可能是负数，初始化为-1
-                    Vector3 closestVector = Vector3.zero;
-                    foreach (Vector3 di in dVectors)
-                    {
-                        float dotProduct = Vector3.Dot(d0.normalized, di.normalized); // 计算点乘（归一化以比较方向）
-
-                        // 找到点乘值最接近1的向量
-                        if (dotProduct > maxDotProduct)
-                        {
-                            maxDotProduct = dotProduct;
-                            closestVector = di;
-                        }
-                    }
-                    d0 = closestVector;
-                    direcN[i] += d0;
-                }
-
+                Vector3 closestPoint = Physics.ClosestPoint(prevPos[i], collider,
+                    collider.transform.position, collider.transform.rotation);
+               
+                //if(i == 10)
+                //    DebugPoint(closestPoint, Color.white, 0.01f, dt);
                 
+                Physics.Raycast(prevPos[i], closestPoint - prevPos[i], out RaycastHit info, LayerMask.GetMask("Ignore Raycast"));
+                Vector3 d0 = info.normal;
+
+                vel[i] += Mathf.Clamp(-Vector3.Dot(vel[i], d0), 0, Mathf.Infinity) * d0;
+                
+                // var colliderTransform = collider.transform;
+                // Vector3[] dVectors = new[]
+                // {
+                //     colliderTransform.up, -colliderTransform.up,
+                //     colliderTransform.forward, -colliderTransform.forward,
+                //     colliderTransform.right, -colliderTransform.right
+                // };
+                // float maxDotProduct = -1f; // 因为点乘值可能是负数，初始化为-1
+                // Vector3 closestVector = Vector3.zero;
+                // foreach (Vector3 di in dVectors)
+                // {
+                //     float dotProduct = Vector3.Dot(d0.normalized, di.normalized); // 计算点乘（归一化以比较方向）
+                //
+                //     // 找到点乘值最接近1的向量
+                //     if (dotProduct > maxDotProduct)
+                //     {
+                //         maxDotProduct = dotProduct;
+                //         closestVector = di;
+                //     }
+                // }
+                // d0 = closestVector;
+                
+                // if(i == 10)
+                //     Debug.Log("处理后法向量:"+ d0);
+                
+                //direcN[i] += d0;
             }
-            direcN[i] = direcN[i].normalized;
-            vel[i] += Mathf.Clamp(-Vector3.Dot(vel[i], direcN[i]), 0, Mathf.Infinity) * direcN[i];
             pointPos[i] = prevPos[i] + vel[i] * dt;
 
             // 往前对于pointPos的更新是改变n帧的预测位置
@@ -193,15 +187,12 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
 
      protected override void PreSolve(float dt, Vector3 g)
     {
-        float oneOverdt = 1f / dt;
-
         forces.ForEach((f) => { vel[f.Key] += dt * f.Value; });
         forces.Clear();
         for (int i = 0; i < pointPos.Count(); i++)
         {
             if (invMass[i] == 0f)
             {
-                Debug.Log("");
                 prevPos[i] = pointPos[i];
                 continue;
             }
@@ -262,7 +253,9 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         {
             var data = PointData.datas[i]; 
             if (data.interactiveItem is InteractiveGrab)
-                ((InteractiveGrab)data.interactiveItem).SetV(vel[i]) ;
+                //((InteractiveGrab)data.interactiveItem).SetV(vel[i]) ;
+                data.interactiveItem.transform.position = pointPos[ctrlIndex];
+
         }
     }
     
@@ -280,7 +273,8 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         PointData.datas[ctrlIndex].SetActive(target);
 
         //先设置更新的位移
-        enforceMove = target.transform.position - pointPos[ctrlIndex];
+        //enforceMove = target.transform.position - pointPos[ctrlIndex];
+        target.transform.position = pointPos[ctrlIndex];
 
         //然后设置质量
         pointInvMass[ctrlIndex] += target.GetMass(); 

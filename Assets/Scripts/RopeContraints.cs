@@ -15,7 +15,7 @@ public class EdgeConstraint : Constraint
 
     public EdgeConstraint(RopeXPBDSolver solver) : base(solver)
     {
-        stiff = 0.1f;
+        stiff = 0.001f;
         this.solver = solver;
         this.length = solver.length;
 
@@ -43,7 +43,7 @@ public class EdgeConstraint : Constraint
             if (len > EPSILON && wSum > EPSILON)
             {
                 //deltaLambda = -((len - length[i])) / (wSum) * edgeKs;
-                deltaLambda = -((len - length[i]) + alpha * lambdas0[i]) / (wSum + alpha) * stiff;
+                deltaLambda = -((len - length[i]) + alpha * lambdas0[i]) / (wSum + alpha);
 
                 Vector3 dP = deltaLambda * (dir / len);
                 solver.pointPos[i] += dP * solver.pointInvMass[i];
@@ -62,7 +62,7 @@ public class EdgeConstraint : Constraint
             wSum = solver.pointInvMass[i] * p0p2.sqrMagnitude + solver.pointInvMass[i + 1] * p2p1.sqrMagnitude + solver.ghostInvMass[i] * p1p0.sqrMagnitude;
             if (wSum > EPSILON)
             {
-                deltaLambda = -(Vector3.Dot(p2pm, p1p0) + alpha * lambdas1[i]) / (wSum + alpha) * stiff;
+                deltaLambda = -(Vector3.Dot(p2pm, p1p0) + alpha * lambdas1[i]) / (wSum + alpha);
                 //deltaLambda = -(Vector3.Dot(p2pm, p1p0)) / (wSum) * edgeKs;
 
                 solver.pointPos[i] += p0p2 * deltaLambda * solver.pointInvMass[i];
@@ -82,7 +82,7 @@ public class EdgeConstraint : Constraint
                 float p2pm_mag = p2pm.magnitude;
                 p2pm *= 1.0f / p2pm_mag;
 
-                deltaLambda = -(p2pm_mag - solver.ghostDistance + alpha * lambdas2[i]) / (wSum + alpha) * stiff;
+                deltaLambda = -(p2pm_mag - solver.ghostDistance + alpha * lambdas2[i]) / (wSum + alpha);
                 //deltaLambda = -(p2pm_mag - solver.ghostDistance) / (wSum) * edgeKs;
 
                 solver.pointPos[i] -= 0.5f * solver.pointInvMass[i] * deltaLambda * p2pm;
@@ -607,63 +607,63 @@ public class BendingAndTwistingConstraint : Constraint
 
 
 
-public class RopeCollisionConstraint : Constraint
-{
-    float restDistance = 0.1f;
+//public class RopeCollisionConstraint : Constraint
+//{
+//    float restDistance = 0.1f;
 
-    float[] lambdas;
-    public RopeCollisionConstraint(RopeXPBDSolver solver) : base(solver)
-    {
-        stiff = 0f;
-        lambdas = new float[mySolver.numParticles];
+//    float[] lambdas;
+//    public RopeCollisionConstraint(RopeXPBDSolver solver) : base(solver)
+//    {
+//        stiff = 0f;
+//        lambdas = new float[mySolver.numParticles];
 
-    }
+//    }
 
-    public override void ResetLambda()
-    {
-        lambdas = new float[mySolver.numParticles];
-    }
-
-
-    public override void SolveConstraint(float dt)
-    {
-        var solver = (RopeXPBDSolver)mySolver;
-        if (solver.collisions.Count <= 0)
-        {
-            return;
-        }
-        float alpha = stiff / (Mathf.Pow(dt, 2));
+//    public override void ResetLambda()
+//    {
+//        lambdas = new float[mySolver.numParticles];
+//    }
 
 
-        foreach (var pair in solver.collisions)
-        {
-            int index = pair.Key;
-            Vector3 distance = pair.Value;
-            //Debug.Log(distance);
+//    public override void SolveConstraint(float dt)
+//    {
+//        var solver = (RopeXPBDSolver)mySolver;
+//        if (solver.collisions.Count <= 0)
+//        {
+//            return;
+//        }
+//        float alpha = stiff / (Mathf.Pow(dt, 2));
 
-            float l = distance.magnitude;
-            float l_rest = restDistance;
 
-            float C = l - l_rest;
-            if (C > 0.01)
-            {
-                continue;
-            }
-            //Debug.Log("wawa" +C.ToString());
+//        foreach (var pair in solver.collisions)
+//        {
+//            int index = pair.Key;
+//            Vector3 distance = pair.Value;
+//            //Debug.Log(distance);
 
-            //(xo-x1) * (1/|x0-x1|) = gradC
-            Vector3 gradC = distance.normalized;
+//            float l = distance.magnitude;
+//            float l_rest = restDistance;
 
-            float wTot = 1;
+//            float C = l - l_rest;
+//            if (C > 0.01)
+//            {
+//                continue;
+//            }
+//            //Debug.Log("wawa" +C.ToString());
 
-            //lambda because |grad_Cn|^2 = 1 because if we move a particle 1 unit, the distance between the particles also grows with 1 unit, and w = w0 + w1
-            float deltalambda = (C) / (wTot);
-            lambdas[index] += deltalambda;
-            //Move the vertices x = x + deltaX where deltaX = lambda * w * gradC
-            //Debug.Log($"{index}增加的距离为{deltalambda}");
-            solver.pointPos[index] += deltalambda * gradC;
-            //solver.collisions[index].Value += (deltalambda * gradC));
-        }
-        solver.collisions.Clear();
-    }
-}
+//            //(xo-x1) * (1/|x0-x1|) = gradC
+//            Vector3 gradC = distance.normalized;
+
+//            float wTot = 1;
+
+//            //lambda because |grad_Cn|^2 = 1 because if we move a particle 1 unit, the distance between the particles also grows with 1 unit, and w = w0 + w1
+//            float deltalambda = (C) / (wTot);
+//            lambdas[index] += deltalambda;
+//            //Move the vertices x = x + deltaX where deltaX = lambda * w * gradC
+//            //Debug.Log($"{index}增加的距离为{deltalambda}");
+//            solver.pointPos[index] += deltalambda * gradC;
+//            //solver.collisions[index].Value += (deltalambda * gradC));
+//        }
+//        solver.collisions.Clear();
+//    }
+//}
