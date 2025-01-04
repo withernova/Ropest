@@ -344,9 +344,9 @@ public class BendingAndTwistingConstraint : Constraint
     {
         Matrix4x4 newMat = new Matrix4x4();
 
-        newMat.SetColumn(0, new Vector3(0, -mat.z, mat.y));
-        newMat.SetColumn(0, new Vector3(mat.z, 0, -mat.x));
-        newMat.SetColumn(0, new Vector3(mat.y, mat.x, 0));
+        newMat.SetColumn(0, new Vector3(0, mat.z, -mat.y));
+        newMat.SetColumn(1, new Vector3(-mat.z, 0, mat.x));
+        newMat.SetColumn(2, new Vector3(mat.y, -mat.x, 0));
 
         return newMat;
     }
@@ -540,67 +540,130 @@ public class BendingAndTwistingConstraint : Constraint
 }
 
 
-public class BendTwistConstraint : Constraint
+//public class BendTwistConstraint : Constraint
+//{
+//    RopeXPBDSolver solver;
+//    public Quaternion[] restQs;
+//    public BendTwistConstraint(XPBDSolver solver) : base(solver)
+//    {
+//        this.solver = solver as RopeXPBDSolver;
+//        restQs = new Quaternion[this.solver.pointPos.Count() - 1];
+
+
+//        for (int i = 0; i < this.solver.pointQ.Count() - 1; i++)
+//        {
+//            restQs[i] = CalculateDarbQ(i);
+//        }
+//    }
+
+
+//    public Quaternion CalculateDarbQ(int i)
+//    {
+//        Quaternion restDarbouxVector = new Quaternion(solver.pointQ[i].x, solver.pointQ[i].y, solver.pointQ[i].z, -solver.pointQ[i].w) * solver.pointQ[i + 1];
+//        Quaternion omega_plus, omega_minus;
+
+//        omega_plus = new Quaternion(restDarbouxVector.x + 1, restDarbouxVector.y, restDarbouxVector.z, restDarbouxVector.w);
+//        omega_minus = new Quaternion(restDarbouxVector.x - 1, restDarbouxVector.y, restDarbouxVector.z, restDarbouxVector.w);
+//        if (SqrMagnitude(omega_minus) > SqrMagnitude(omega_plus))
+//            restDarbouxVector = new Quaternion(-restDarbouxVector.x, -restDarbouxVector.y, -restDarbouxVector.z, -restDarbouxVector.w);
+//        return restDarbouxVector;
+//    }
+
+//    public float SqrMagnitude(Quaternion quaternion)
+//    {
+//        return quaternion.x * quaternion.x + quaternion.y * quaternion.y + quaternion.z * quaternion.z + quaternion.w * quaternion.w;
+//    }
+
+//    public override void SolveConstraint(float dt)
+//    {
+//        for (int i = 0; i < solver.pointQ.Count() - 1; ++i)
+//        {
+//            Quaternion omega = new Quaternion(solver.pointQ[i].x, solver.pointQ[i].y, solver.pointQ[i].z, -solver.pointQ[i].w) * solver.pointQ[i + 1];
+
+//            Quaternion omega_plus;
+//            omega_plus = new Quaternion(restQs[i].x + omega.x, restQs[i].y + omega.y, restQs[i].z + omega.z, restQs[i].w + omega.w);
+//            omega = new Quaternion(-restQs[i].x + omega.x, -restQs[i].y + omega.y, -restQs[i].z + omega.z, -restQs[i].w + omega.w);
+//            if(SqrMagnitude(omega) > SqrMagnitude(omega_plus))
+//            {
+//                omega = omega_plus;
+//            }
+
+//            for (int j = 0; j < 3; j++) omega[j] *= stiff / (solver.invMass[i] + solver.invMass[i + 1] + (1.0e-6f));
+//            omega.w = 0.0f;    //discrete Darboux vector does not have vanishing scalar part
+
+//            solver.pointQ[i] *= new Quaternion(omega.x * solver.invMass[i], omega.y * solver.invMass[i], omega.z * solver.invMass[i], omega.w * solver.invMass[i]);
+//            solver.pointQ[i + 1] *= new Quaternion(omega.x * solver.invMass[i + 1], omega.y * solver.invMass[i + 1], omega.z * solver.invMass[i + 1], omega.w * solver.invMass[i + 1]);
+
+//            solver.pointQ[i].Normalize();
+//            solver.pointQ[i + 1].Normalize();
+//        }
+//    }
+
+//    public override void ResetLambda()
+//    {
+
+//    }
+//}
+
+
+
+public class RopeCollisionConstraint : Constraint
 {
-    RopeXPBDSolver solver;
-    public Quaternion[] restQs;
-    public BendTwistConstraint(XPBDSolver solver) : base(solver)
+    float restDistance = 0.1f;
+
+    float[] lambdas;
+    public RopeCollisionConstraint(RopeXPBDSolver solver) : base(solver)
     {
-        this.solver = solver as RopeXPBDSolver;
-        restQs = new Quaternion[this.solver.pointPos.Count() - 1];
+        stiff = 0f;
+        lambdas = new float[mySolver.numParticles];
 
-
-        for (int i = 0; i < this.solver.pointQ.Count() - 1; i++)
-        {
-            restQs[i] = CalculateDarbQ(i);
-        }
-    }
-
-
-    public Quaternion CalculateDarbQ(int i)
-    {
-        Quaternion restDarbouxVector = new Quaternion(solver.pointQ[i].x, solver.pointQ[i].y, solver.pointQ[i].z, -solver.pointQ[i].w) * solver.pointQ[i + 1];
-        Quaternion omega_plus, omega_minus;
-
-        omega_plus = new Quaternion(restDarbouxVector.x + 1, restDarbouxVector.y, restDarbouxVector.z, restDarbouxVector.w);
-        omega_minus = new Quaternion(restDarbouxVector.x - 1, restDarbouxVector.y, restDarbouxVector.z, restDarbouxVector.w);
-        if (SqrMagnitude(omega_minus) > SqrMagnitude(omega_plus))
-            restDarbouxVector = new Quaternion(-restDarbouxVector.x, -restDarbouxVector.y, -restDarbouxVector.z, -restDarbouxVector.w);
-        return restDarbouxVector;
-    }
-
-    public float SqrMagnitude(Quaternion quaternion)
-    {
-        return quaternion.x * quaternion.x + quaternion.y * quaternion.y + quaternion.z * quaternion.z + quaternion.w * quaternion.w;
-    }
-
-    public override void SolveConstraint(float dt)
-    {
-        for (int i = 0; i < solver.pointQ.Count() - 1; ++i)
-        {
-            Quaternion omega = new Quaternion(solver.pointQ[i].x, solver.pointQ[i].y, solver.pointQ[i].z, -solver.pointQ[i].w) * solver.pointQ[i + 1];
-
-            Quaternion omega_plus;
-            omega_plus = new Quaternion(restQs[i].x + omega.x, restQs[i].y + omega.y, restQs[i].z + omega.z, restQs[i].w + omega.w);
-            omega = new Quaternion(-restQs[i].x + omega.x, -restQs[i].y + omega.y, -restQs[i].z + omega.z, -restQs[i].w + omega.w);
-            if(SqrMagnitude(omega) > SqrMagnitude(omega_plus))
-            {
-                omega = omega_plus;
-            }
-
-            for (int j = 0; j < 3; j++) omega[j] *= stiff / (solver.invMass[i] + solver.invMass[i + 1] + (1.0e-6f));
-            omega.w = 0.0f;    //discrete Darboux vector does not have vanishing scalar part
-
-            solver.pointQ[i] *= new Quaternion(omega.x * solver.invMass[i], omega.y * solver.invMass[i], omega.z * solver.invMass[i], omega.w * solver.invMass[i]);
-            solver.pointQ[i + 1] *= new Quaternion(omega.x * solver.invMass[i + 1], omega.y * solver.invMass[i + 1], omega.z * solver.invMass[i + 1], omega.w * solver.invMass[i + 1]);
-
-            solver.pointQ[i].Normalize();
-            solver.pointQ[i + 1].Normalize();
-        }
     }
 
     public override void ResetLambda()
     {
+        lambdas = new float[mySolver.numParticles];
+    }
 
+
+    public override void SolveConstraint(float dt)
+    {
+        var solver = (RopeXPBDSolver)mySolver;
+        if (solver.collisions.Count <= 0)
+        {
+            return;
+        }
+        float alpha = stiff / (Mathf.Pow(dt, 2));
+
+
+        foreach (var pair in solver.collisions)
+        {
+            int index = pair.Key;
+            Vector3 distance = pair.Value;
+            //Debug.Log(distance);
+
+            float l = distance.magnitude;
+            float l_rest = restDistance;
+
+            float C = l - l_rest;
+            if (C > 0.01)
+            {
+                continue;
+            }
+            //Debug.Log("wawa" +C.ToString());
+
+            //(xo-x1) * (1/|x0-x1|) = gradC
+            Vector3 gradC = distance.normalized;
+
+            float wTot = 1;
+
+            //lambda because |grad_Cn|^2 = 1 because if we move a particle 1 unit, the distance between the particles also grows with 1 unit, and w = w0 + w1
+            float deltalambda = (C) / (wTot);
+            lambdas[index] += deltalambda;
+            //Move the vertices x = x + deltaX where deltaX = lambda * w * gradC
+            //Debug.Log($"{index}增加的距离为{deltalambda}");
+            solver.pointPos[index] += deltalambda * gradC;
+            //solver.collisions[index].Value += (deltalambda * gradC));
+        }
+        solver.collisions.Clear();
     }
 }

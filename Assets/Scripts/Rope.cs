@@ -43,7 +43,7 @@ public class Rope : MonoBehaviour
     {
         solver = new RopeXPBDSolver();
         solver.InitByMesh(ropeMesh, gravity, new RopeSolverInitData(subdivision, segments));
-        //controlPoint.ctrl = solver;
+        controlPoint.ctrl = solver;
         ready = true;
         yield break;
     }
@@ -94,27 +94,26 @@ public class Rope : MonoBehaviour
         if (ready)
         {            
             UpdateMesh();
-            //controlPoint.transform.localPosition = solver.pointPos[solver.ctrlIndex];
-            for (var index = 0; index < solver.pointPos.Length; index++)
-            {
-                solver.direcN[index] = Vector3.zero;
-                var localVertex = solver.pointPos[index];
-                Vector3 worldVertex = transform.TransformPoint(localVertex);
-                foreach (var collider in Physics.OverlapSphere(worldVertex, 0.01f))
-                {
-                    if (collider.gameObject == gameObject || collider.isTrigger) continue;
-    
-                    Physics.Raycast(worldVertex, collider.ClosestPoint(worldVertex) - worldVertex, out RaycastHit info);
-                    solver.direcN[index] += info.normal;
-                    solver.direcN[index].Normalize();
-                }
-            }
         }
     }
 
     // 计算和模拟
     public void FixedUpdate()
     {
+        for (var index = 0; index < solver.pointPos.Length; index++)
+        {
+            var localVertex = solver.pointPos[index];
+            Vector3 worldVertex = transform.TransformPoint(localVertex);
+            foreach (var collider in Physics.OverlapSphere(worldVertex, 0.1f))
+            {
+                if (collider.gameObject == gameObject || collider.isTrigger) continue;
+
+                Physics.Raycast(worldVertex, collider.ClosestPoint(worldVertex) - worldVertex, out RaycastHit info);
+                solver.collisions.Add(new(index, transform.InverseTransformPoint(info.point) - localVertex));
+                Debug.DrawLine(worldVertex, info.point);
+                //Debug.Log(info.point);
+            }
+        }
         if (!simulate || !ready)
             return;
         solver.Simulate(Time.fixedDeltaTime);
