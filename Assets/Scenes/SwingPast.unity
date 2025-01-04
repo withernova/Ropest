@@ -285,7 +285,7 @@ Transform:
   m_GameObject: {fileID: 247903785}
   serializedVersion: 2
   m_LocalRotation: {x: 0.10737767, y: 0.842656, z: -0.18280894, w: 0.49495634}
-  m_LocalPosition: {x: -2.620245, y: 1.905, z: 1.4609302}
+  m_LocalPosition: {x: -2.620245, y: 1.5, z: 1.4609302}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -363,7 +363,7 @@ Transform:
   m_GameObject: {fileID: 254794590}
   serializedVersion: 2
   m_LocalRotation: {x: 0.10737764, y: 0.84265614, z: -0.182809, w: 0.49495614}
-  m_LocalPosition: {x: 0, y: -0.00000011920929, z: 0.00000011920929}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -442,7 +442,7 @@ Transform:
   m_GameObject: {fileID: 301371700}
   serializedVersion: 2
   m_LocalRotation: {x: 0.09838076, y: 0.8458339, z: -0.16749191, w: 0.49682266}
-  m_LocalPosition: {x: 0, y: -0.00000011920929, z: 0.00000011920929}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1175,6 +1175,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   freeLookCamera: {fileID: 1615549834}
+  caster: {fileID: 0}
 --- !u!114 &1502678995
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1241,7 +1242,7 @@ Transform:
   m_GameObject: {fileID: 1525131346}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0.405, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -1487,7 +1488,7 @@ Transform:
   m_GameObject: {fileID: 1615549833}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -2.620245, y: 1.905, z: 1.4609302}
+  m_LocalPosition: {x: -2.620245, y: 1.5, z: 1.4609302}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:

@@ -60,19 +60,19 @@ public class InteractiveCaster : MonoBehaviour
         tickCD.Start();
     }
 
-    public InteractiveBase TriggerInteractiveUndeploy()
+    public T TriggerInteractiveUndeploy<T>() where T : InteractiveBase
     {
         if (inCD) return null;
 
         var a = Physics.OverlapSphere(transform.position, interactiveRadios, interactiveLayerMask);
 
-        var inCondition = a.ToList().Where(item => null != item.GetComponent<InteractiveBase>() && !(null != condition && !condition.Invoke(item.GetComponent<InteractiveBase>())));
+        var inCondition = a.ToList().Where(item => null != item.GetComponent<T>() && !(null != condition && !condition.Invoke(item.GetComponent<T>())));
         var res = inCondition.Where(item => (transform.position - item.transform.position).magnitude == a.Min(item => (transform.position - item.transform.position).magnitude));
 
         inCD = true;
         tickCD.Start();
 
-        return res.First().GetComponent<InteractiveBase>();
+        return res.First().GetComponent<T>();
     }
 
     public void ConstantInteractive(float deltaTime)

@@ -51,19 +51,24 @@ public class PlayerController : MonoBehaviour
 
 
 
-        
+
         //// ×¥È¡µÈ
-        //if(ctrl != null )
-        //{
-        //    Transform transform;
-        //    caster.TriggerInteractive<InteractiveBase>(transform);
-        //    base.Interact
-        //    if (Input.GetKeyDown(KeyCode.E))
-        //    {
-                
-        //        ctrl.Grab();
-        //    }
-        //}
+        if (ctrl != null)
+        {
+            //Transform transform;
+            
+            if (Input.GetKeyDown(KeyCode.E))
+            {
+                InteractiveGrab interactive = caster.TriggerInteractiveUndeploy<InteractiveGrab>();
+                ctrl.Grab(interactive);
+            }
+
+            if (Input.GetKeyDown(KeyCode.Q))
+            {
+                InteractiveSwing interactive = caster.TriggerInteractiveUndeploy<InteractiveSwing>();
+                ctrl.Swing(interactive);
+            }
+        }
 
 
 
