@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: a9a2b2d0751b54b869d0061fb1ac9ab9
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 203399
+  packageName: GUI Pro - Simple Casual
+  packageVersion: 1.0.7
+  assetPath: Assets/Layer Lab/GUI Pro-SimpleCasual/Prefabs/Prefabs_DemoScene_Panels/Light/Popup_ErrorNetwork.prefab
+  uploadId: 706935

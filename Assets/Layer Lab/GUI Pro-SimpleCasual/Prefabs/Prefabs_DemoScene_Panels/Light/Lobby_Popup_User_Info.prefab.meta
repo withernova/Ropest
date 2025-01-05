@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 92ecd2b222b694b8e8355b9228a05429
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 203399
+  packageName: GUI Pro - Simple Casual
+  packageVersion: 1.0.7
+  assetPath: Assets/Layer Lab/GUI Pro-SimpleCasual/Prefabs/Prefabs_DemoScene_Panels/Light/Lobby_Popup_User_Info.prefab
+  uploadId: 706935

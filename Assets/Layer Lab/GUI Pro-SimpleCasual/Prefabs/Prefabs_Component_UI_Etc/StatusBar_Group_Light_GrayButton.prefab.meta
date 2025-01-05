@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 065d42745eac248ea8bfa8155e70cf46
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 203399
+  packageName: GUI Pro - Simple Casual
+  packageVersion: 1.0.7
+  assetPath: Assets/Layer Lab/GUI Pro-SimpleCasual/Prefabs/Prefabs_Component_UI_Etc/StatusBar_Group_Light_GrayButton.prefab
+  uploadId: 706935
