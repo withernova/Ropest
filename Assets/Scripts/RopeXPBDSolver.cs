@@ -52,7 +52,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
     {
         m_constraints.Add(new BendingAndTwistingConstraint(this));
         m_constraints.Add(new EdgeConstraint(this));
-        m_constraints.Add(new DoubleDistanceConstraint(this));
+        //m_constraints.Add(new DoubleDistanceConstraint(this));
         //m_constraints.Add(new BendTwistConstraint(this));
     }
 
@@ -167,7 +167,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
             // 往前对于pointPos的更新是改变n帧的预测位置
 
             if (i < pointPos.Count() - 1)
-                ghostVels[i] = (ghostPos[i] - ghostPrev[i]) * oneOverdt;
+                ghostVels[i] =( vel[i] + vel[i+1])/2;
 
             Enforce();
 
