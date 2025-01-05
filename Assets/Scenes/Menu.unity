@@ -11238,7 +11238,7 @@ GameObject:
   - component: {fileID: 395277744}
   - component: {fileID: 395277746}
   - component: {fileID: 395277745}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: TipsArea (2)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -13085,7 +13085,7 @@ GameObject:
   - component: {fileID: 436049741}
   - component: {fileID: 436049743}
   - component: {fileID: 436049742}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: TipsArea (1)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -16396,8 +16396,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 541799854}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 1, z: 0, w: 0}
-  m_LocalPosition: {x: -2, y: 0, z: -32}
+  m_LocalRotation: {x: -0, y: 1, z: -0, w: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 0.5, y: 0.5, z: -0.5}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -16405,7 +16405,7 @@ Transform:
   - {fileID: 1644303893}
   - {fileID: 1676914791}
   - {fileID: 1500060093}
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 2010089772}
   m_LocalEulerAnglesHint: {x: 0, y: 180, z: 0}
 --- !u!1 &542225842
 GameObject:
@@ -17804,8 +17804,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 575592993}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: -24}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 2, y: 0, z: 8}
   m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 1
   m_Children:
@@ -17813,7 +17813,7 @@ Transform:
   - {fileID: 450144678}
   - {fileID: 669957949}
   - {fileID: 1089334865}
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 2010089772}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &577656935
 GameObject:
@@ -18048,6 +18048,18 @@ MonoBehaviour:
           m_FloatArgument: 0
           m_StringArgument: 
           m_BoolArgument: 0
+        m_CallState: 2
+      - m_Target: {fileID: 2010089771}
+        m_TargetAssemblyTypeName: UnityEngine.GameObject, UnityEngine
+        m_MethodName: SetActive
+        m_Mode: 6
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 1
         m_CallState: 2
 --- !u!114 &580426088
 MonoBehaviour:
@@ -29916,7 +29928,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   isUseTimer: 0
   respawnPoint: {fileID: 1551470729}
+  defeatedUI: {fileID: 0}
+  deadPlane: {fileID: 0}
   cam: {fileID: 1084789457}
+  score: 0
+  scoreTextUI: {fileID: 0}
 --- !u!4 &986841998
 Transform:
   m_ObjectHideFlags: 0
@@ -31062,7 +31078,7 @@ GameObject:
   - component: {fileID: 1012885854}
   - component: {fileID: 1012885856}
   - component: {fileID: 1012885855}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: TipsArea end
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -33118,7 +33134,7 @@ MonoBehaviour:
   m_XAxis:
     Value: 0
     m_SpeedMode: 0
-    m_MaxSpeed: 300
+    m_MaxSpeed: 100
     m_AccelTime: 0.1
     m_DecelTime: 0.1
     m_InputAxisName: Mouse X
@@ -50179,7 +50195,7 @@ GameObject:
   - component: {fileID: 1738705565}
   - component: {fileID: 1738705564}
   - component: {fileID: 1738705563}
-  m_Layer: 0
+  m_Layer: 9
   m_Name: TipsArea
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -56680,8 +56696,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1961403157}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: -16}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 2, y: 0, z: 16}
   m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 1
   m_Children:
@@ -56689,7 +56705,7 @@ Transform:
   - {fileID: 1706647831}
   - {fileID: 1038242548}
   - {fileID: 948442993}
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 2010089772}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1962450598
 GameObject:
@@ -58220,6 +58236,41 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2008823632}
   m_Mesh: {fileID: 5691666353457927829, guid: d0a2dbd0fe7556b4b822ec7a20748cc1, type: 3}
+--- !u!1 &2010089771
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2010089772}
+  m_Layer: 0
+  m_Name: TeachingBlocks
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!4 &2010089772
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2010089771}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -2, y: 0, z: -32}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 4255226373289188886}
+  - {fileID: 1961403158}
+  - {fileID: 575592994}
+  - {fileID: 541799855}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &2020364231
 GameObject:
   m_ObjectHideFlags: 0
@@ -79172,8 +79223,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8926514967628032746}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: -8}
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 2, y: 0, z: 24}
   m_LocalScale: {x: 0.5, y: 0.5, z: 0.5}
   m_ConstrainProportionsScale: 1
   m_Children:
@@ -79181,7 +79232,7 @@ Transform:
   - {fileID: 2108173863}
   - {fileID: 8728285828807004993}
   - {fileID: 7738299299577638396}
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 2010089772}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!65 &4258654099400757898
 BoxCollider:
@@ -99957,7 +100008,4 @@ SceneRoots:
   - {fileID: 1551470730}
   - {fileID: 964894664}
   - {fileID: 8478802864667735516}
-  - {fileID: 4255226373289188886}
-  - {fileID: 1961403158}
-  - {fileID: 575592994}
-  - {fileID: 541799855}
+  - {fileID: 2010089772}

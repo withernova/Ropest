@@ -69,7 +69,6 @@ GameObject:
   - component: {fileID: 7440656079371701580}
   - component: {fileID: 3190046840505889781}
   - component: {fileID: 4637602356262151745}
-  - component: {fileID: 6481057436076826178}
   m_Layer: 2
   m_Name: ControlPoint
   m_TagString: Untagged
@@ -158,7 +157,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   caster: {fileID: 3190046840505889781}
-  score: 0
 --- !u!114 &3190046840505889781
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -193,26 +191,7 @@ MonoBehaviour:
   interactiveRadios: 1
   interactiveLayerMask:
     serializedVersion: 2
-    m_Bits: 256
-  interactiveType: 2
-  interactiveCD: 0
-  lastTriggerTime: 0
---- !u!114 &6481057436076826178
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 5000403610047538184}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ab75a88ddc3972147af5b2a56af61099, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  interactiveRadios: 1
-  interactiveLayerMask:
-    serializedVersion: 2
-    m_Bits: 512
+    m_Bits: 768
   interactiveType: 2
   interactiveCD: 0
   lastTriggerTime: 0

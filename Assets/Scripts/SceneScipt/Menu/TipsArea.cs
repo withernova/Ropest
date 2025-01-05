@@ -11,7 +11,7 @@ public class TipsArea : InteractiveBase
     
     public override void OnStart()
     {
-        
+        playerEnter.Invoke();
     }
 
     public override void OnUpdate(float deltaTime)
