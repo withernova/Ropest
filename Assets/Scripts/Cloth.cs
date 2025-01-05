@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.Serialization;
 using Random = UnityEngine.Random;
@@ -41,7 +42,7 @@ public class Cloth : MonoBehaviour
     IEnumerator InitSolver()
     {
         solver = new ClothXPBDSolver();
-        solver.InitByMesh(clothMesh, gravity, new ClothSolverInitData(subdivision));
+        solver.InitByMesh(clothMesh, gravity, new ClothSolverInitData(subdivision, transform.GetChild(0).AddComponent<SphereCollider>()));
         ready = true;
         yield break;
     }

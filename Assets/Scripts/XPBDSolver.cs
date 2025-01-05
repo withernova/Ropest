@@ -41,7 +41,7 @@ public abstract class XPBDSolver
         List<Triangle> triangleList = new List<Triangle>();
         //float totalMass = 1;
         //float totalS = 0;
-        invMass = Enumerable.Repeat(0f, pos.Length).ToArray();
+        invMass = Enumerable.Repeat(1f, pos.Length).ToArray();
         for (int i = 0; i < mesh.triangles.Length;)
         {
             int i0 = i;
