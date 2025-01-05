@@ -101,6 +101,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         float m = 1f;
         ghostInvMass = Enumerable.Repeat(m, pointPos.Count() - 1).ToArray();
         pointInvMass = Enumerable.Repeat(m, pointPos.Count()).ToArray();
+        pointInvMass[0] = 0.08f;
         //for (int i = 0; i < pointPos.Count(); i++)
         //{
         //    pointInvMass[i] = i + 1;
@@ -157,6 +158,9 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
                     {
                         pointPos[i] += correctionVector;
                         pointPos[i + 1] += correctionVector;
+
+                        FrictionForNative(i, distance, direction);
+                        FrictionForNative(i + 1, distance, direction);
                     }
                 }
             }
@@ -206,7 +210,6 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
             //}
             //vel[i] += g * dt;
 
-
             // n+1帧：往前的pointpos是第n帧的实际位置
 
             prevPos[i] = pointPos[i];
@@ -222,6 +225,24 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
             }
 
         }
+    }
+
+    void FrictionForNative(int i, float distance, Vector3 direction)
+    {
+        ref var p1 = ref pointPos[i];
+        ref var p1_ = ref prevPos[i];
+
+        var p1_p1 = p1 - p1_;
+
+        var t1 = Vector3.ProjectOnPlane(p1_p1, direction);
+
+        if (t1.magnitude < 0.01f)
+        {
+            p1_ = p1;
+            return;
+        }
+
+        p1_ += p1_p1.normalized * 0.25f * distance;
     }
 
     public override int FindClosestPoint(Vector3 toFindPos, Transform trans)
