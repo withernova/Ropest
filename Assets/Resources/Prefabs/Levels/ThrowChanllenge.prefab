@@ -20260,7 +20260,7 @@ GameObject:
   - component: {fileID: 4158312769268014222}
   - component: {fileID: -2469061225113158516}
   m_Layer: 0
-  m_Name: CubeChanllenge2
+  m_Name: ThrowChanllenge
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
