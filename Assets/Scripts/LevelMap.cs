@@ -21,7 +21,7 @@ public class LevelMap : MonoBehaviour
         dropMapCountDown = TimerManager.instance.CreateTimer(lastTime, 1, () => MapManager.Instance.DropMap(this));
         droped = false;
         transform.position = new Vector3(transform.position.x, 0);
-        GetComponentsInChildren<InteractiveBase>().ToList().ForEach(inter => inter.EndInteractive());
+        //GetComponentsInChildren<InteractiveBase>().ToList().ForEach(inter => inter.EndInteractive());
     }
 
     public Vector3 GetLasPos()

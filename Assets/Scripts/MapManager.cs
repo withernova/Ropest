@@ -22,10 +22,12 @@ public class MapManager : MonoBehaviour
         maps = new List<string>()
         {
             "Levels/BarChanllenge",
-            //"Levels/RowChanllenge",
-            //"Levels/Level3",
+            "Levels/ClambChanllenge",
             "Levels/CubeChanllenge",
-            "Levels/CubeChanllenge2",
+            "Levels/LongRunChallenge",
+            "Levels/LongRunChallenge2",
+            "Levels/Throw_Hard_1_Chanllenge",
+            "Levels/ThrowChanllenge",
         };
 
         for (int i = 0; i < 3; i++)
@@ -51,7 +53,7 @@ public class MapManager : MonoBehaviour
         {
             levelMap.SetBeginningPos(previousMap.Last().GetLasPos().x);
         }
-        levelMap.Init(id, Random.Range(1,10));
+        levelMap.Init(id, 100);
         
         previousMap.Add(levelMap);
     }

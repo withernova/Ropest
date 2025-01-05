@@ -11,5 +11,6 @@ public interface IControllable
     public void SwitchCtrl(int ctrlIndex);
 
     public void ReleaseAll();
+    public void Stop();
     public void LoseControl();
 }

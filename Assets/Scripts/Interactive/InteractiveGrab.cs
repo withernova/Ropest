@@ -4,7 +4,7 @@ public class InteractiveGrab : InteractiveBase
 {
     RigidbodyXPBD rigidbodyXPBD;
 
-    private void Start()
+    private void Awake()
     {
         rigidbodyXPBD = GetComponent<RigidbodyXPBD>();
     }
