@@ -19,6 +19,7 @@ public class PlayerController : MonoBehaviour
         freeLookCamera.LookAt = transform;
         caster = GetComponent<InteractiveCaster>();
 
+        caster.condition += item => !item.activating;
         //groundCheckCollider = GetComponent<SphereCollider>();
     }
 
@@ -33,18 +34,15 @@ public class PlayerController : MonoBehaviour
             {
                 InteractiveGrab interactive = caster.TriggerInteractiveUndeploy<InteractiveGrab>();
                 Debug.Log(interactive);
-                if (interactive != null)
-                {
-                    ctrl.Grab(interactive);
-                }
+
+                ctrl.Grab(interactive);
+
             }
 
             if (Input.GetKeyDown(KeyCode.Q))
             {
                 InteractiveSwing interactive = caster.TriggerInteractiveUndeploy<InteractiveSwing>();
-                Debug.Log(interactive);
-                if (interactive != null)
-                    ctrl.Swing(interactive);
+                ctrl.Swing(interactive);
             }
 
             if (Input.GetKeyDown(KeyCode.R))

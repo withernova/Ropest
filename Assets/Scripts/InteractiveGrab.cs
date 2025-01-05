@@ -22,6 +22,7 @@ public class InteractiveGrab : InteractiveBase
     public override void OnStart()
     {
         GetComponent<Rigidbody>().isKinematic = true;
+        activating = true;
     }
 
     public override void OnUpdate(float deltaTime)
@@ -33,5 +34,6 @@ public class InteractiveGrab : InteractiveBase
     {
         GetComponent<Rigidbody>().isKinematic = false;
         rigidbodyXPBD.rb.linearVelocity = rigidbodyXPBD.linearVelocity;
+        activating= false;
     }
 }
