@@ -21,6 +21,7 @@ public class InteractiveKite : InteractiveBase
     public override void EndInteractive()
     {
         platform.position = new Vector3(platform.position.x, 3f);
+        transform.position = platform.position + new Vector3(2.5f, 0, 0);
         transform.parent.GetComponent<Rigidbody>().isKinematic = false;
     }
     // Start is called once before the first execution of Update after the MonoBehaviour is created
@@ -33,7 +34,7 @@ public class InteractiveKite : InteractiveBase
     {
         if (transform.position.y < -10)
         {
-            transform.position = platform.position + new Vector3(3, 0, 0);
+            transform.position = platform.position + new Vector3(2.5f, 0, 0);
             transform.parent.GetComponent<Rigidbody>().linearVelocity = Vector3.zero;
         }
     }
