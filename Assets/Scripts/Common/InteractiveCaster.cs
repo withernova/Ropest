@@ -7,10 +7,10 @@ using static UnityEditor.Progress;
 
 public enum InteractiveType
 {
-    Contact, //接触持续
-    Trigger, //手动触发
-    Last, //停留触发
-    UnDeploy //不负责触发逻辑
+    Contact, //鎺ヨЕ鎸佺画
+    Trigger, //鎵嬪姩瑙﹀彂
+    Last, //鍋滅暀瑙﹀彂
+    UnDeploy //涓嶈礋璐ｈЕ鍙戦�昏緫
 }
 
 public class InteractiveCaster : MonoBehaviour
@@ -42,7 +42,7 @@ public class InteractiveCaster : MonoBehaviour
             LastInteractive();
         }
 
-        //高亮物体
+        //楂樹寒鐗╀綋
         //UIManager.instance.showInteractiveUI(a.Length > 0);
     }
 
