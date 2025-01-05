@@ -16,11 +16,17 @@ public class PointData
         originMass = ori;
         PointData.datas.Add(this);
     }
-
-    public void SetActive(InteractiveBase baseI)
+   
+    public bool SetActive(InteractiveBase baseI)
     {
+        if(isActivating)
+        {
+            return false;
+        }
         interactiveItem = baseI;
+        baseI.OnStart();
         isActivating = true;
+        return true;
     }
     public float Reset()
     {

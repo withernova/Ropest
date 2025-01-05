@@ -218,6 +218,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
             //pointPos[i] = Vector3.Lerp(pointPos[i], pointPos[i] + vel[i] * dt, 0.8f);
 
             if (i < pointPos.Count() - 1)
+
             {
 
                 ghostPrev[i] = ghostPos[i];
@@ -284,15 +285,21 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
     public void Swing(InteractiveSwing target)
     {
         Debug.Log("swing");
+        if (!PointData.datas[ctrlIndex].SetActive(target))
+        {
+            PointData.datas[ctrlIndex].Reset();
+        }
         enforceMove = target.GetTargetPos(pointPos[ctrlIndex]);
-        PointData.datas[ctrlIndex].SetActive(target);
         pointInvMass[ctrlIndex] = 0;
     }
 
     public void Grab(InteractiveGrab target)
     {
         Debug.Log("grab");
-        PointData.datas[ctrlIndex].SetActive(target);
+        if (!PointData.datas[ctrlIndex].SetActive(target))
+        {
+            PointData.datas[ctrlIndex].Reset();
+        }
 
         //先设置更新的位移
         //enforceMove = target.transform.position - pointPos[ctrlIndex];
