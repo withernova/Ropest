@@ -67,10 +67,8 @@ public class Cloth : MonoBehaviour
         {
             Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
             Physics.Raycast(ray, out RaycastHit hitInfo);
-            if(hitInfo.transform == transform)
-            {
-                solver.StartGrab(hitInfo.point, transform);
-            }
+            Vector3 vertexPos = ray.origin + ray.direction * 2;
+            solver.StartGrab(vertexPos, transform);
         }
         if(Input.GetMouseButtonUp(0))
         {

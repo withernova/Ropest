@@ -33,9 +33,8 @@ public class InteractiveKite : InteractiveBase
     {
         if (transform.position.y < -10)
         {
-            transform.position = Vector3.zero;
+            transform.position = platform.position + new Vector3(3, 0, 0);
             transform.parent.GetComponent<Rigidbody>().linearVelocity = Vector3.zero;
-
         }
     }
 }

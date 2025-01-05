@@ -59,7 +59,7 @@ public class LevelMap : MonoBehaviour
             dropMapCountDown.Stop();
             MapManager.Instance.DropMap(this);
             other.transform.parent.GetComponent<Rope>().solver.ReleaseAll();
-            other.transform.parent.GetComponentInChildren<PlayerController>().score += 1;
+            GameManager.Instance.score += 1;
         }
     }
 }
