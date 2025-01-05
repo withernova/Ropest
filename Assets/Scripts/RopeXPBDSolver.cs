@@ -13,11 +13,13 @@ public class RopeSolverInitData : SolverInitData
     public int subdivision;
     public int segments;
     public CapsuleCollider cc;
-    public RopeSolverInitData(int subdivision, int segments, CapsuleCollider cc)
+    public float radius;
+    public RopeSolverInitData(int subdivision, int segments, CapsuleCollider cc, float radius)
     {
         this.subdivision = subdivision;
         this.segments = segments;
         this.cc = cc;
+        this.radius = radius;
     }
 }
 public class RopeXPBDSolver : XPBDSolver, IControllable
@@ -60,6 +62,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
     {
         numSubSteps = 10;
         RopeSolverInitData ropeData = data as RopeSolverInitData;
+        radius = ropeData.radius;
         subdivision = ropeData.subdivision;
         cc = ropeData.cc;
         cc.radius = radius;
@@ -101,7 +104,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         float m = 1f;
         ghostInvMass = Enumerable.Repeat(m, pointPos.Count() - 1).ToArray();
         pointInvMass = Enumerable.Repeat(m, pointPos.Count()).ToArray();
-        pointInvMass[0] = 0.08f;
+        pointInvMass[0] = 0.8f;
         //for (int i = 0; i < pointPos.Count(); i++)
         //{
         //    pointInvMass[i] = i + 1;
@@ -132,12 +135,18 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
             //}
             //v = (x - xPrev) / dt
             if (i == ctrlIndex)
+            {
                 pointPos[i] += move;
+                move = Vector3.zero;
+            }
+                
 
             if(i != pointPos.Count() - 1)
             {
                 foreach (var collider in Physics.OverlapCapsule(pointPos[i], pointPos[i + 1], 0.03f, ~LayerMask.GetMask("Ignore Raycast")))
                 {
+                    if (collider.isTrigger) continue;
+                    
                     SetCapsuleFromTo(pointPos[i], pointPos[i + 1]);
                     //Debug.Log("ww");
 
