@@ -5,7 +5,6 @@ using UnityEngine;
 
 public class PlayerController : MonoBehaviour
 {
-    public CinemachineFreeLook freeLookCamera;
     private SphereCollider groundCheckCollider;
     private float speed = 1f;
     private float jumpSpeed = 1f;
@@ -15,8 +14,6 @@ public class PlayerController : MonoBehaviour
     public InteractiveCaster caster;
     private void Start()
     {
-        freeLookCamera.Follow = transform;
-        freeLookCamera.LookAt = transform;
         caster = GetComponent<InteractiveCaster>();
 
         caster.condition += item => !item.activating;
@@ -25,7 +22,7 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
-        //// ץȡ��
+        //// 抓取等
         if (ctrl != null)
         {
             //Transform transform;
@@ -68,7 +65,6 @@ public class PlayerController : MonoBehaviour
         float vertical = 0f;
         horizontal = Input.GetAxis("Horizontal");
         vertical = Input.GetAxis("Vertical");
-        Transform cameraTransform = freeLookCamera.VirtualCameraGameObject.transform;
         Vector3 forward = Camera.main.transform.forward;
         Vector3 horizontalForward = new Vector3(forward.x, 0, forward.z).normalized;
         Vector3 right = Vector3.Cross(Vector3.up, horizontalForward);
@@ -82,8 +78,6 @@ public class PlayerController : MonoBehaviour
         //         move += jumpSpeed * Vector3.up;
         //     }
         // }
-
-
 
         if (ctrl != null)
         {

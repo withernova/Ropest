@@ -5,7 +5,7 @@ using UnityEngine.Events;
 
 public abstract class InteractiveBase : MonoBehaviour
 {
-    public float lastingTime;
+    [HideInInspector] public float lastingTime;
     public bool activating;
     public float radius;
     public UnityAction OnInteractive;

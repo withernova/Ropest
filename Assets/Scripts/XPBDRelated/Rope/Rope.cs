@@ -15,10 +15,10 @@ public class Rope : MonoBehaviour
     private Mesh ropeMesh;
     //MeshCollider meshCollider;
     [Header("绳子参数")]
-    [Range(0.1f, 100f)] public float length = 5;
-    [Range(1, 100)] public int segments = 10;
-    [Range(3, 30)] public int subdivision = 20;
-    [Range(0.01f, 10f)] public float thickness = 1;
+    [Range(0.1f, 100f)] public float length = 1;
+    [Range(1, 100)] public int segments = 16;
+    [Range(3, 30)] public int subdivision = 8;
+    [Range(0.01f, 10f)] public float thickness = 0.02f;
     public Vector3 meshOrigin;
     public Material ropeMaterial;
     
@@ -27,17 +27,7 @@ public class Rope : MonoBehaviour
 
     [Header("游戏对象")]
     public PlayerController controlPoint;
-
-
-
-    private void Awake()
-    {
-        ropeMesh = CreateRope(length, segments, subdivision, thickness, meshOrigin);
-        if (simulate)
-            StartCoroutine(InitSolver());
-        gameObject.AddComponent<MeshFilter>();
-        gameObject.AddComponent<MeshRenderer>();
-    }
+    
 
     IEnumerator InitSolver()
     {
@@ -48,53 +38,25 @@ public class Rope : MonoBehaviour
         yield break;
     }
 
-    private void Start()
+    public void LoadRope(Vector3 origin)
     {
+        meshOrigin = origin;
+        ropeMesh = CreateRope(length, segments, subdivision, thickness, meshOrigin);
+        if (simulate)
+            StartCoroutine(InitSolver());
+        gameObject.AddComponent<MeshFilter>();
+        gameObject.AddComponent<MeshRenderer>();
         GetComponent<MeshFilter>().mesh = ropeMesh;
         GetComponent<MeshRenderer>().material = ropeMaterial;
-        /*meshCollider = gameObject.AddComponent<MeshCollider>();
-        meshCollider.convex = true;
-        meshCollider.isTrigger = true;
-        meshCollider.sharedMesh = null;
-        meshCollider.sharedMesh = ropeMesh;*/
-        //gameObject.AddComponent<Rigidbody>().useGravity = false;
     }
 
     // 处理动作和更新mesh
     public void Update()
     {
-        if (Input.GetMouseButtonDown(0))
-        {
-            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-            Physics.Raycast(ray, out RaycastHit hitInfo);
-            Vector3 vertexPos = ray.origin + ray.direction * 2;
-            solver.StartGrab(vertexPos, transform);
-        }
-        if(Input.GetMouseButtonUp(0))
-        {
-            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-            Physics.Raycast(ray, out RaycastHit hitInfo);
-            if (solver.grabPoint != -1)
-            {
-                solver.EndGrab(hitInfo.point, transform);
-            }
-        }
-        if (Input.GetMouseButton(0))
-        {
-            if (solver.grabPoint != -1)
-            {
-                Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
-                Physics.Raycast(ray, out RaycastHit hitInfo);
-                Vector3 vertexPos = ray.origin + ray.direction * 2;
-                solver.OnGrabbing(vertexPos, transform);
-            }
-        }
-
-
-        if (ready)
-        {            
-            UpdateMesh();
-        }
+        if (!ready)
+            return;
+        
+        UpdateMesh();
     }
 
     // 计算和模拟
@@ -119,7 +81,7 @@ public class Rope : MonoBehaviour
         solver.Simulate(Time.fixedDeltaTime);
         
     }
-
+    
     private Mesh CreateRope(float len, int seg, int sub, float radius, Vector3 initPos)
     {
         Mesh mesh = new Mesh();
@@ -219,7 +181,6 @@ public class Rope : MonoBehaviour
 
         //meshCollider.sharedMesh = null;
         //meshCollider.sharedMesh = ropeMesh;
-
     }
 
     private void OnDrawGizmos()
