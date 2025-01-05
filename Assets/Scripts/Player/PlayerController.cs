@@ -58,6 +58,10 @@ public class PlayerController : MonoBehaviour
             {
                 ctrl.SwitchCtrl(-1);
             }
+            if (Input.GetKey(KeyCode.Space))
+            {
+                ctrl.Stop();
+            }
         }
     }
 
