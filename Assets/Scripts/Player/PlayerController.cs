@@ -12,7 +12,6 @@ public class PlayerController : MonoBehaviour
     public IControllable ctrl;
 
     public InteractiveCaster caster;
-    public int score;
 
     private void Start()
     {

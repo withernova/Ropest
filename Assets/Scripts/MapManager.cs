@@ -31,6 +31,8 @@ public class MapManager : MonoBehaviour
             "Levels/ThrowChanllenge",
             "Levels/RotateClambChanllenge",
             "Levels/RotateClambChanllenge2",
+            "Levels/RotateClambChanllenge3",
+            "Levels/KiteChanllenge",
         };
 
         for (int i = 0; i < 3; i++)

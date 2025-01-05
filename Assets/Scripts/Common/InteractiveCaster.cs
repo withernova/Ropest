@@ -50,7 +50,7 @@ public class InteractiveCaster : MonoBehaviour
     {
         if (inCD)return;
         
-        var a = Physics.OverlapSphere(transform.position, interactiveRadios, interactiveLayerMask);
+        var a = Physics.OverlapSphere(transform.position, interactiveRadios, interactiveLayerMask, QueryTriggerInteraction.Collide);
 
         var inCondition = a.ToList().Where(item => null != item.GetComponent<InteractiveBase>() && !(null != condition && !condition.Invoke(item.GetComponent<InteractiveBase>())));
         var res = inCondition.ToList().OrderBy(item => (item.transform.position - transform.position).magnitude);
@@ -84,7 +84,7 @@ public class InteractiveCaster : MonoBehaviour
 
     public void ConstantInteractive(float deltaTime)
     {
-        var a = Physics.OverlapSphere(transform.position, interactiveRadios, interactiveLayerMask);
+        var a = Physics.OverlapSphere(transform.position, interactiveRadios, interactiveLayerMask, QueryTriggerInteraction.Collide);
 
         var inCondition = a.ToList().Where(item => null != item.GetComponent<InteractiveBase>() && !(null != condition && !condition.Invoke(item.GetComponent<InteractiveBase>())));
         var res = inCondition.ToList().OrderBy(item => (item.transform.position - transform.position).magnitude);
@@ -96,7 +96,7 @@ public class InteractiveCaster : MonoBehaviour
     {
         if (inCD) return;
 
-        var a = Physics.OverlapSphere(transform.position, interactiveRadios, interactiveLayerMask);
+        var a = Physics.OverlapSphere(transform.position, interactiveRadios, interactiveLayerMask, QueryTriggerInteraction.Collide);
 
         foreach (var iTarget in a)
         {
