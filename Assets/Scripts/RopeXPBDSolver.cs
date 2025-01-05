@@ -60,7 +60,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
 
     protected override void InitSolver(Mesh mesh, SolverInitData data)
     {
-        numSubSteps = 10;
+        numSubSteps = 6;
         RopeSolverInitData ropeData = data as RopeSolverInitData;
         radius = ropeData.radius;
         subdivision = ropeData.subdivision;
@@ -112,7 +112,12 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         //        ghostInvMass[i] = i + 1;
         //}
         for (int i = 0; i < pointPos.Count(); i++)
-            new PointData(m);
+        {
+            if (i != ctrlIndex)
+                new PointData(m,i);
+            else
+                new PointData(0.8f,i);
+        }
 
         length = new float[ghostPos.Count()];
         for (int i = 0; i < ghostPos.Count(); i++)
@@ -285,8 +290,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         {
             var data = PointData.datas[i];
             if (data.interactiveItem is InteractiveGrab)
-                //((InteractiveGrab)data.interactiveItem).SetV(vel[i]) ;
-                data.interactiveItem.transform.position = pointPos[ctrlIndex];
+                data.interactiveItem.transform.position = pointPos[i];
 
         }
     }
@@ -300,6 +304,19 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         }
         enforceMove = target.GetTargetPos(pointPos[ctrlIndex]);
         pointInvMass[ctrlIndex] = 0;
+    }
+
+    public void ReleaseGrab()
+    {
+        foreach(var item in PointData.GetAllActivated())
+        {
+            if(item.interactiveItem is InteractiveGrab)
+            {
+                InteractiveGrab grab = (InteractiveGrab)item.interactiveItem;
+                grab.SetV(vel[item.index]);
+            }
+                item.Reset();
+        }
     }
 
     public void Grab(InteractiveGrab target)
@@ -316,6 +333,16 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
 
         //然后设置质量
         pointInvMass[ctrlIndex] += target.GetMass();
+    }
+
+    public void SwitchCtrl(int i)
+    {
+        if (i == -1)
+        {
+            i = pointPos.Length-1;
+        }
+        pointInvMass[ctrlIndex] = PointData.datas[ctrlIndex].originMass;
+        ctrlIndex = (ctrlIndex + i) % (pointPos.Length);
     }
 
     public void LoseControl()

@@ -8,5 +8,8 @@ public interface IControllable
 
     public void Grab(InteractiveGrab target);
 
+    public void SwitchCtrl(int ctrlIndex);
+
+    public void ReleaseGrab();
     public void LoseControl();
 }

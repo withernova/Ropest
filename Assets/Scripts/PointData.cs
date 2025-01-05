@@ -10,10 +10,12 @@ public class PointData
     public bool isActivating = false;
     public InteractiveBase interactiveItem;
     public float originMass;
+    public int index;
 
-    public PointData(float ori)
+    public PointData(float oriM,int i)
     {
-        originMass = ori;
+        originMass = oriM;
+        index = i;  
         PointData.datas.Add(this);
     }
    
