@@ -69,8 +69,9 @@ public class InteractiveCaster : MonoBehaviour
         var a = Physics.OverlapSphere(transform.position, interactiveRadios, interactiveLayerMask, QueryTriggerInteraction.Collide);
 
         var inCondition = a.ToList().Where(item => null != item.GetComponent<T>() && !(null != condition && !condition.Invoke(item.GetComponent<T>())));
-        var res = inCondition.Where(item => (transform.position - item.transform.position).magnitude == a.Min(item => (transform.position - item.transform.position).magnitude));
-
+        var res = inCondition.ToList().OrderByDescending(item => (item.transform.position - transform.position).magnitude);
+        //Debug.Log(res.Count());
+        //Debug.Log(inCondition.Count() + "a" + res.Count());
         if(res.Count() > 0 && (transform.position - res.First().transform.position).magnitude < res.First().GetComponent<InteractiveBase>().radius)
         {
             inCD = true;

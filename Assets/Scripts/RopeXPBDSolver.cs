@@ -6,6 +6,7 @@ using System.Xml.Serialization;
 using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.UIElements;
+using static UnityEditor.Progress;
 using static UnityEditor.Searcher.SearcherWindow.Alignment;
 
 public class RopeSolverInitData : SolverInitData
@@ -38,7 +39,8 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
     public int subdivision;
     public float[] length;
 
-    public float ghostDistance = 1f;
+    public float ghostDistance = 0.1f;
+    private float ctrlMass = 0.2f;
 
     public int ctrlIndex = 0;
 
@@ -52,8 +54,8 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
 
     protected override void AddConstraints()
     {
-        m_constraints.Add(new BendingAndTwistingConstraint(this));
         m_constraints.Add(new EdgeConstraint(this));
+        m_constraints.Add(new BendingAndTwistingConstraint(this));
         //m_constraints.Add(new DoubleDistanceConstraint(this));
         //m_constraints.Add(new BendTwistConstraint(this));
     }
@@ -104,7 +106,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         float m = 1f;
         ghostInvMass = Enumerable.Repeat(m, pointPos.Count() - 1).ToArray();
         pointInvMass = Enumerable.Repeat(m, pointPos.Count()).ToArray();
-        pointInvMass[0] = 0.8f;
+        pointInvMass[0] = ctrlMass;
         //for (int i = 0; i < pointPos.Count(); i++)
         //{
         //    pointInvMass[i] = i + 1;
@@ -113,10 +115,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         //}
         for (int i = 0; i < pointPos.Count(); i++)
         {
-            if (i != ctrlIndex)
-                new PointData(m,i);
-            else
-                new PointData(0.8f,i);
+            new PointData(m, i);
         }
 
         length = new float[ghostPos.Count()];
@@ -139,19 +138,19 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
             //    continue;
             //}
             //v = (x - xPrev) / dt
-            if (i == ctrlIndex)
+            if (i == ctrlIndex && pointInvMass[i] != 0)
             {
                 pointPos[i] += move;
                 move = Vector3.zero;
             }
-                
 
-            if(i != pointPos.Count() - 1)
+
+            if (i != pointPos.Count() - 1)
             {
                 foreach (var collider in Physics.OverlapCapsule(pointPos[i], pointPos[i + 1], 0.03f, ~LayerMask.GetMask("Ignore Raycast")))
                 {
-                    if (collider.isTrigger) continue;
-                    
+                    if (collider.isTrigger || PointData.GetAllActivated().Where(item => item.interactiveItem.gameObject == collider.gameObject).Count() >0) continue;
+
                     SetCapsuleFromTo(pointPos[i], pointPos[i + 1]);
                     //Debug.Log("ww");
 
@@ -178,14 +177,14 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
                     }
                 }
             }
-            
+
             //pointPos[i] = prevPos[i] + vel[i] * dt;
             vel[i] = (pointPos[i] - prevPos[i]) * oneOverdt;
 
             // 往前对于pointPos的更新是改变n帧的预测位置
 
             if (i < pointPos.Count() - 1)
-                ghostVels[i] =( vel[i] + vel[i+1])/2;
+                ghostVels[i] = (vel[i] + vel[i + 1]) / 2;
 
 
         }
@@ -207,8 +206,10 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
     {
         forces.ForEach((f) => { vel[f.Key] += dt * f.Value; });
         forces.Clear();
+
         for (int i = 0; i < pointPos.Count(); i++)
         {
+            Enforce(i);
             if (pointInvMass[i] == 0f)
             {
                 prevPos[i] = pointPos[i];
@@ -225,6 +226,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
 
             // n+1帧：往前的pointpos是第n帧的实际位置
 
+
             prevPos[i] = pointPos[i];
             pointPos[i] += vel[i] * dt;
 
@@ -237,7 +239,6 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
                 ghostPrev[i] = ghostPos[i];
                 ghostPos[i] += ghostVels[i] * dt;
             }
-            Enforce();
 
         }
     }
@@ -279,20 +280,21 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
 
     private Vector3 enforceMove = new Vector3();
 
-    public void Enforce()
+    public void Enforce(int i)
     {
-        if (enforceMove.magnitude > 1e-6f)
+        if (enforceMove.magnitude > 1e-6f && i == ctrlIndex)
         {
-            pointPos[ctrlIndex] += enforceMove;
+            pointPos[i] = enforceMove;
+            move = Vector3.zero;
             enforceMove = new Vector3();
+            pointInvMass[i] = 0;
         }
-        for (int i = 0; i < PointData.datas.Count; i++)
-        {
-            var data = PointData.datas[i];
-            if (data.interactiveItem is InteractiveGrab)
-                data.interactiveItem.transform.position = pointPos[i];
 
-        }
+        var data = PointData.datas[i];
+        if (data.interactiveItem is InteractiveGrab)
+            data.interactiveItem.transform.position = pointPos[i];
+
+
     }
 
     public void Swing(InteractiveSwing target)
@@ -300,22 +302,24 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         Debug.Log("swing");
         if (!PointData.datas[ctrlIndex].SetActive(target))
         {
-            PointData.datas[ctrlIndex].Reset();
+            pointInvMass[ctrlIndex] = PointData.datas[ctrlIndex].Reset();
+            return;
         }
         enforceMove = target.GetTargetPos(pointPos[ctrlIndex]);
-        pointInvMass[ctrlIndex] = 0;
+        Debug.Log(enforceMove);
     }
 
     public void ReleaseGrab()
     {
-        foreach(var item in PointData.GetAllActivated())
+        foreach (var item in PointData.GetAllActivated())
         {
-            if(item.interactiveItem is InteractiveGrab)
+            pointInvMass[item.index] = item.Reset();
+            if (item.interactiveItem is InteractiveGrab)
             {
                 InteractiveGrab grab = (InteractiveGrab)item.interactiveItem;
                 grab.SetV(vel[item.index]);
             }
-                item.Reset();
+            pointInvMass[ctrlIndex] = ctrlMass;
         }
     }
 
@@ -324,7 +328,9 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         Debug.Log("grab");
         if (!PointData.datas[ctrlIndex].SetActive(target))
         {
-            PointData.datas[ctrlIndex].Reset();
+            ((InteractiveGrab)PointData.datas[ctrlIndex].interactiveItem).SetV(vel[ctrlIndex]);
+            pointInvMass[ctrlIndex] = PointData.datas[ctrlIndex].Reset();
+            return;
         }
 
         //先设置更新的位移
@@ -332,17 +338,25 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         target.transform.position = pointPos[ctrlIndex];
 
         //然后设置质量
-        pointInvMass[ctrlIndex] += target.GetMass();
+        //pointInvMass[ctrlIndex] += target.GetMass();
     }
 
     public void SwitchCtrl(int i)
     {
         if (i == -1)
         {
-            i = pointPos.Length-1;
+            i = pointPos.Length - 1;
         }
-        pointInvMass[ctrlIndex] = PointData.datas[ctrlIndex].originMass;
+        if (!PointData.datas[ctrlIndex].isActivating)
+        {
+            pointInvMass[ctrlIndex] = PointData.datas[ctrlIndex].originMass;
+
+        }
         ctrlIndex = (ctrlIndex + i) % (pointPos.Length);
+        if (!PointData.datas[ctrlIndex].isActivating)
+        {
+            pointInvMass[ctrlIndex] = ctrlMass;
+        };
     }
 
     public void LoseControl()

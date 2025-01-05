@@ -7,7 +7,7 @@ using UnityEngine.Serialization;
 public class RigidbodyXPBD : MonoBehaviour
 {
     public Vector3 linearVelocity;
-    private Rigidbody rb;
+    public Rigidbody rb;
     public float mass = 1f; 
 
 
@@ -18,6 +18,6 @@ public class RigidbodyXPBD : MonoBehaviour
     }
     void Update()
     {
-        rb.linearVelocity = linearVelocity;
+        //rb.linearVelocity = linearVelocity;
     }
 }
