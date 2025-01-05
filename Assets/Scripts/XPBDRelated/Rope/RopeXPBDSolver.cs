@@ -43,6 +43,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
     private float ctrlMass = 0.2f;
 
     public float gravityFactor = 1f;
+    bool stop = false;
 
     public int ctrlIndex = 0;
 
@@ -230,6 +231,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
 
 
             prevPos[i] = pointPos[i];
+            Vector3.ClampMagnitude(vel[i],new Vector3(0.4f,0.4f,0.4f).magnitude);
             pointPos[i] += vel[i] * dt;
 
             //pointPos[i] = Vector3.Lerp(pointPos[i], pointPos[i] + vel[i] * dt, 0.8f);
@@ -286,10 +288,20 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
     {
         if (enforceMove.magnitude > 1e-6f && i == ctrlIndex)
         {
-            pointPos[i] = enforceMove;
+            pointPos[i] = Vector3.Lerp(pointPos[i], enforceMove, 0.2f);
             move = Vector3.zero;
-            enforceMove = new Vector3();
+            if ((enforceMove - pointPos[i]).magnitude < 1e-4)
+            {
+                pointPos[i] = enforceMove;
+                enforceMove = new Vector3();
+            }
             pointInvMass[i] = 0;
+        }
+
+        if (stop)
+        {
+            vel[ctrlIndex] = Vector3.Lerp(vel[ctrlIndex],Vector3.zero,0.3f);
+            stop = false;
         }
 
         var data = PointData.datas[i];
@@ -316,6 +328,11 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         Debug.Log(enforceMove);
     }
 
+    public void Stop()
+    {
+        stop = true;
+    }
+
     public void ReleaseAll()
     {
         foreach (var item in PointData.GetAllActivated())
@@ -324,7 +341,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
             {
                 CancelGrab(item.index);
             }
-            if(item.interactiveItem is InteractiveSwing)
+            if (item.interactiveItem is InteractiveSwing)
             {
                 CancelSwing(item.index);
             }
@@ -354,7 +371,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
             return;
         }
 
-        if(target == null) return;
+        if (target == null) return;
         PointData.datas[ctrlIndex].SetActive(target);
         //先设置更新的位移
         //enforceMove = target.transform.position - pointPos[ctrlIndex];
