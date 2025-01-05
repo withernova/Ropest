@@ -10,6 +10,6 @@ public interface IControllable
 
     public void SwitchCtrl(int ctrlIndex);
 
-    public void ReleaseGrab();
+    public void ReleaseAll();
     public void LoseControl();
 }

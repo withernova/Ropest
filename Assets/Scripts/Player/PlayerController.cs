@@ -49,7 +49,7 @@ public class PlayerController : MonoBehaviour
 
             if (Input.GetKeyDown(KeyCode.R))
             {
-                ctrl.ReleaseGrab();
+                ctrl.ReleaseAll();
             }
 
             if (Input.GetKeyDown(KeyCode.Alpha1))
