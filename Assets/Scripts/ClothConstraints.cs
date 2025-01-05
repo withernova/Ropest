@@ -1493,7 +1493,7 @@ public class SectionAreaConstriant : Constraint
 //            //(xo-x1) * (1/|x0-x1|) = gradC
 //            Vector3 gradC = distance.normalized;
 
-  
+
 //            float wTot = 1;
 
 //            //lambda because |grad_Cn|^2 = 1 because if we move a particle 1 unit, the distance between the particles also grows with 1 unit, and w = w0 + w1

@@ -24,6 +24,7 @@ public class ClothXPBDSolver : XPBDSolver
     protected override void AddConstraints()
     {
         m_constraints.Add(new DistanceConstraint(this));
+        //m_constraints.Add(new CollisionConstraint(this));
         //m_constraints.Add(new VolumeConstraint(this));
         //m_constraints.Add(new SectionVolume2Constraint(this));
         //m_constraints.Add(new SectionAreaConstriant(this));
@@ -92,7 +93,6 @@ public class ClothXPBDSolver : XPBDSolver
                 if (collider.isTrigger) continue;
 
                 SetSphereTo(pos[i]);
-                //Debug.Log("ww");
 
                 Vector3 otherPosition = collider.gameObject.transform.position;
                 Quaternion otherRotation = collider.gameObject.transform.rotation;
@@ -105,12 +105,11 @@ public class ClothXPBDSolver : XPBDSolver
                     out direction, out distance
                 );
                 Vector3 correctionVector = distance * direction;
-
                 //the most inelegant way, but time is short
                 if (overlapped)
                 {
                     pos[i] += correctionVector;
-
+                    if (collider.name == "collider") Debug.Log(correctionVector);
                     FrictionForNative(i, distance, direction);
                 }
             }
