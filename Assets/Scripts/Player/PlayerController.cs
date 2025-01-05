@@ -46,6 +46,20 @@ public class PlayerController : MonoBehaviour
                 if (interactive != null)
                     ctrl.Swing(interactive);
             }
+
+            if (Input.GetKeyDown(KeyCode.R))
+            {
+                ctrl.ReleaseGrab();
+            }
+
+            if (Input.GetKeyDown(KeyCode.Alpha1))
+            {
+                ctrl.SwitchCtrl(1);
+            }
+            if (Input.GetKeyDown(KeyCode.Alpha3))
+            {
+                ctrl.SwitchCtrl(-1);
+            }
         }
     }
 
