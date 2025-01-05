@@ -5,6 +5,7 @@ TagManager:
   serializedVersion: 3
   tags:
   - Ground
+  - tip
   layers:
   - Default
   - TransparentFX
@@ -15,7 +16,7 @@ TagManager:
   - Food
   - Interactable
   - DeadPlane
-  - 
+  - TipsArea
   - 
   - 
   - 
