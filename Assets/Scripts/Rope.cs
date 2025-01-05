@@ -13,7 +13,7 @@ public class Rope : MonoBehaviour
     private bool ready = false;
 
     private Mesh ropeMesh;
-    MeshCollider meshCollider;
+    //MeshCollider meshCollider;
     [Header("绳子参数")]
     [Range(0.1f, 100f)] public float length = 5;
     [Range(1, 100)] public int segments = 10;
@@ -52,11 +52,11 @@ public class Rope : MonoBehaviour
     {
         GetComponent<MeshFilter>().mesh = ropeMesh;
         GetComponent<MeshRenderer>().material = ropeMaterial;
-        meshCollider = gameObject.AddComponent<MeshCollider>();
+        /*meshCollider = gameObject.AddComponent<MeshCollider>();
         meshCollider.convex = true;
         meshCollider.isTrigger = true;
         meshCollider.sharedMesh = null;
-        meshCollider.sharedMesh = ropeMesh;
+        meshCollider.sharedMesh = ropeMesh;*/
         //gameObject.AddComponent<Rigidbody>().useGravity = false;
     }
 
@@ -214,11 +214,11 @@ public class Rope : MonoBehaviour
     {
         solver.TryRendering(ropeMesh);
         //ropeMesh.vertices = solver.pos;
-        ropeMesh.RecalculateBounds();
+        //ropeMesh.RecalculateBounds();
         ropeMesh.RecalculateNormals();
 
-        meshCollider.sharedMesh = null;
-        meshCollider.sharedMesh = ropeMesh;
+        //meshCollider.sharedMesh = null;
+        //meshCollider.sharedMesh = ropeMesh;
 
     }
 

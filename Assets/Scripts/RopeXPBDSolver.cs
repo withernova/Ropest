@@ -329,7 +329,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         if (!PointData.datas[ctrlIndex].SetActive(target))
         {
             ((InteractiveGrab)PointData.datas[ctrlIndex].interactiveItem).SetV(vel[ctrlIndex]);
-            pointInvMass[ctrlIndex] = PointData.datas[ctrlIndex].Reset();
+            PointData.datas[ctrlIndex].Reset();
             return;
         }
 

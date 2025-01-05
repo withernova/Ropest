@@ -7,7 +7,7 @@ public class PlayerController : MonoBehaviour
 {
     public CinemachineFreeLook freeLookCamera;
     private SphereCollider groundCheckCollider;
-    private float speed = 5f;
+    private float speed = 1f;
     private float jumpSpeed = 1f;
     private Vector3 move;
     public IControllable ctrl;
@@ -73,10 +73,10 @@ public class PlayerController : MonoBehaviour
         Transform cameraTransform = freeLookCamera.VirtualCameraGameObject.transform;
         Vector3 forward = Camera.main.transform.forward;
         Vector3 horizontalForward = new Vector3(forward.x, 0, forward.z).normalized;
-        Vector3 right = Vector3.Cross(horizontalForward, Vector3.up);
+        Vector3 right = Vector3.Cross(Vector3.up, horizontalForward);
         //move += Time.deltaTime * new Vector3(1, 0, 0);
         //move += Time.deltaTime * speed * vertical * horizontalForward + Time.deltaTime * speed * horizontal * right;
-        move += Time.deltaTime * speed * vertical * horizontalForward;
+        move += Time.deltaTime * speed * (vertical * horizontalForward + horizontal * right).normalized;
         // if (groundCheckCollider.CompareTag("Ground"))
         // {s
         //     if (Input.GetKeyDown(KeyCode.Space))
