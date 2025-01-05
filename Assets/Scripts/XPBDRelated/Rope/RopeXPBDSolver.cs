@@ -40,7 +40,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
     public float[] length;
 
     public float ghostDistance = 0.1f;
-    private float ctrlMass = 0.2f;
+    private float ctrlMass = 0.3f;
 
     public float gravityFactor = 1f;
     bool stop = false;
@@ -231,7 +231,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
 
 
             prevPos[i] = pointPos[i];
-            Vector3.ClampMagnitude(vel[i], new Vector3(0.4f, 0.4f, 0.4f).magnitude);
+            Vector3.ClampMagnitude(vel[i], new Vector3(0.2f, 0.2f, 0.2f).magnitude);
             pointPos[i] += vel[i] * dt;
 
             //pointPos[i] = Vector3.Lerp(pointPos[i], pointPos[i] + vel[i] * dt, 0.8f);
@@ -469,33 +469,36 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
 
             for (int i = 0; i < interplor; i++)
             {
-                float r = ((i * segmentLength)) / le;
-                Vector3 scaledTheta = theta * n.normalized * r;
-                float cosR = Mathf.Cos(scaledTheta.magnitude);
-                float sinR = Mathf.Sin(scaledTheta.magnitude);
-                Vector3 axis = scaledTheta.normalized;
-
-                Matrix4x4 rotationInterpolated = Matrix4x4.identity;
-                rotationInterpolated.m00 = cosR + axis.x * axis.x * (1 - cosR);
-                rotationInterpolated.m01 = axis.x * axis.y * (1 - cosR) - axis.z * sinR;
-                rotationInterpolated.m02 = axis.x * axis.z * (1 - cosR) + axis.y * sinR;
-                rotationInterpolated.m10 = axis.y * axis.x * (1 - cosR) + axis.z * sinR;
-                rotationInterpolated.m11 = cosR + axis.y * axis.y * (1 - cosR);
-                rotationInterpolated.m12 = axis.y * axis.z * (1 - cosR) - axis.x * sinR;
-                rotationInterpolated.m20 = axis.z * axis.x * (1 - cosR) - axis.y * sinR;
-                rotationInterpolated.m21 = axis.z * axis.y * (1 - cosR) + axis.x * sinR;
-                rotationInterpolated.m22 = cosR + axis.z * axis.z * (1 - cosR);
-
-                Matrix4x4 interpolatedFrame = rotationInterpolated * De1;
-                interpolatedFrames.Add(interpolatedFrame);
-
-                if (i > 0)
+                if (i == 0)
                 {
-                    Vector3 d3 = (Vector3)interpolatedFrame.GetColumn(2).normalized;
-                    Vector3 d2 = (Vector3)interpolatedFrame.GetColumn(1).normalized;
-                    Vector3 d1 = (Vector3)interpolatedFrame.GetColumn(0).normalized;
+                    currentPosition = currentPosition + d3f * segmentLength;
+                    sPosition.Add(currentPosition);
+                }
+                else
+                {
+                    // 插值旋转
+                    float r = ((i * segmentLength)) / le;
+                    Vector3 scaledTheta = theta * n.normalized * r;
+                    float cosR = Mathf.Cos(scaledTheta.magnitude);
+                    float sinR = Mathf.Sin(scaledTheta.magnitude);
+                    Vector3 axis = scaledTheta.normalized;
 
-                    //Debug.Log($"Segment {e}, Interpolated {i}: d1={d1}, d2={d2}, d3={d3}");
+                    Matrix4x4 rotationInterpolated = Matrix4x4.identity;
+                    rotationInterpolated.m00 = cosR + axis.x * axis.x * (1 - cosR);
+                    rotationInterpolated.m01 = axis.x * axis.y * (1 - cosR) - axis.z * sinR;
+                    rotationInterpolated.m02 = axis.x * axis.z * (1 - cosR) + axis.y * sinR;
+                    rotationInterpolated.m10 = axis.y * axis.x * (1 - cosR) + axis.z * sinR;
+                    rotationInterpolated.m11 = cosR + axis.y * axis.y * (1 - cosR);
+                    rotationInterpolated.m12 = axis.y * axis.z * (1 - cosR) - axis.x * sinR;
+                    rotationInterpolated.m20 = axis.z * axis.x * (1 - cosR) - axis.y * sinR;
+                    rotationInterpolated.m21 = axis.z * axis.y * (1 - cosR) + axis.x * sinR;
+                    rotationInterpolated.m22 = cosR + axis.z * axis.z * (1 - cosR);
+
+                    Matrix4x4 interpolatedFrame = rotationInterpolated * De1;
+                    interpolatedFrames.Add(interpolatedFrame);
+
+                    // 使用插值后的 d3 进行步进
+                    Vector3 d3 = (Vector3)interpolatedFrame.GetColumn(2).normalized;
                     currentPosition = currentPosition + d3 * segmentLength;
                     sPosition.Add(currentPosition);
                 }

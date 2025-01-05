@@ -1047,49 +1047,37 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1308567587}
     m_Modifications:
-    - target: {fileID: 6158257017706933272, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
-      propertyPath: m_SizeDelta.x
-      value: 523.02
-      objectReference: {fileID: 0}
-    - target: {fileID: 6158257017706933272, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: -312.99997
-      objectReference: {fileID: 0}
-    - target: {fileID: 7088657611138982519, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
-      propertyPath: m_AnchorMax.y
+    - target: {fileID: 4350769732677651712, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.size
       value: 1
       objectReference: {fileID: 0}
-    - target: {fileID: 7088657611138982519, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
-      propertyPath: m_AnchorMin.y
+    - target: {fileID: 4350769732677651712, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Mode
       value: 1
       objectReference: {fileID: 0}
-    - target: {fileID: 7088657611138982519, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
-      propertyPath: m_SizeDelta.x
-      value: 373.02
+    - target: {fileID: 4350769732677651712, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Target
+      value: 
+      objectReference: {fileID: 1164415545}
+    - target: {fileID: 4350769732677651712, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_CallState
+      value: 2
       objectReference: {fileID: 0}
-    - target: {fileID: 7088657611138982519, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
-      propertyPath: m_AnchoredPosition.x
-      value: 261.51
+    - target: {fileID: 4350769732677651712, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_MethodName
+      value: PlayAgain
       objectReference: {fileID: 0}
-    - target: {fileID: 7088657611138982519, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
-      propertyPath: m_AnchoredPosition.y
-      value: -69
+    - target: {fileID: 4350769732677651712, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_TargetAssemblyTypeName
+      value: GameManager, Assembly-CSharp
       objectReference: {fileID: 0}
-    - target: {fileID: 7140149050292235508, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
-      propertyPath: m_text
-      value: Play Again
-      objectReference: {fileID: 0}
-    - target: {fileID: 7542436560834318256, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
-      propertyPath: m_text
-      value: FAILED
+    - target: {fileID: 4350769732677651712, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
+      propertyPath: m_OnClick.m_PersistentCalls.m_Calls.Array.data[0].m_Arguments.m_ObjectArgumentAssemblyTypeName
+      value: UnityEngine.Object, UnityEngine
       objectReference: {fileID: 0}
     - target: {fileID: 7542436561637020448, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
       propertyPath: m_Name
       value: Play_Result_Defeat_Common
-      objectReference: {fileID: 0}
-    - target: {fileID: 7542436561637020448, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
-      propertyPath: m_IsActive
-      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7542436561637020451, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
       propertyPath: m_Pivot.x
@@ -1170,10 +1158,6 @@ PrefabInstance:
     - target: {fileID: 7542436561637020451, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7542436561988506080, guid: d7a22f03956d18a41a8baeb017b3059d, type: 3}
-      propertyPath: m_text
-      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

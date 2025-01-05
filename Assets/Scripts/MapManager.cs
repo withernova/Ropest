@@ -58,8 +58,13 @@ public class MapManager : MonoBehaviour
         {
             levelMap.SetBeginningPos(previousMap.Last().GetLasPos().x);
         }
+        else
+        {
+            levelMap.SetBeginningPos(1);
+        }
         levelMap.Init(id, 100);
-        
+
+
         previousMap.Add(levelMap);
     }
 

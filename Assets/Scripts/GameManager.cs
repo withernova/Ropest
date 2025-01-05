@@ -6,8 +6,10 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-public class GameManager : SingletonForMonoBehaviour<GameManager>
+public class GameManager : MonoBehaviour
 {
+    public static GameManager Instance;
+
     public bool isUseTimer = true;
     public GameObject respawnPoint;
     public GameObject defeatedUI;
@@ -17,6 +19,11 @@ public class GameManager : SingletonForMonoBehaviour<GameManager>
     public CinemachineFreeLook cam;
     public int score;
     public TextMeshProUGUI scoreTextUI;
+
+    private void Awake()
+    {
+        Instance = this;
+    }
 
     private void Start()
     {
@@ -52,6 +59,8 @@ public class GameManager : SingletonForMonoBehaviour<GameManager>
 
     public void PlayAgain()
     {
-        SceneManager.LoadScene("KUMO");
+        MapManager.Instance.previousMap.ForEach(a => ResourcesPool.Instance.ReturnOne(MapManager.Instance.maps[a.id], a.gameObject));
+        MapManager.Instance.previousMap = new List<LevelMap>();
+        SceneManager.LoadScene("Menu");
     }
 }

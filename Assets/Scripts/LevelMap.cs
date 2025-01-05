@@ -20,7 +20,7 @@ public class LevelMap : MonoBehaviour
         dropMapCountDown?.Stop();
         dropMapCountDown = TimerManager.instance.CreateTimer(lastTime, 1, () => MapManager.Instance.DropMap(this));
         droped = false;
-        transform.position = new Vector3(transform.position.x, 0);
+        transform.position = new Vector3(transform.position.x, -1);
 
         Material mat = MapManager.Instance.materials[Random.Range(0, MapManager.Instance.materials.Count)];
         transform.Find("object").GetComponentsInChildren<MeshRenderer>().ToList().ForEach(x => x.material = mat);

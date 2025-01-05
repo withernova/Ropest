@@ -32,9 +32,9 @@ public class InteractiveKite : InteractiveBase
 
     private void Update()
     {
-        if (transform.position.y < -10)
+        if (transform.position.y < -4)
         {
-            transform.position = platform.position + new Vector3(2.5f, 0, 0);
+            transform.parent.position = platform.position + new Vector3(2.5f, 0, 0);
             transform.parent.GetComponent<Rigidbody>().linearVelocity = Vector3.zero;
         }
     }

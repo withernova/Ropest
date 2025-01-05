@@ -2439,7 +2439,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 77668694}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 7635ae9182d71b441af1668a07255257, type: 3}
+  m_Script: {fileID: 11500000, guid: cbb3ff7571183dc4aae7f2e6651eaf2d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   targetmodel: {fileID: 903564150}
@@ -11392,11 +11392,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 395277743}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a56984309473b8544a6f647b016dcb0f, type: 3}
+  m_Script: {fileID: 11500000, guid: 5524b536f2009af4bb4391ed6f70c26d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   lastingTime: 0
-  activating: 1
+  activating: 0
   radius: 0
   playerEnter:
     m_PersistentCalls:
@@ -13244,11 +13244,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 436049740}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a56984309473b8544a6f647b016dcb0f, type: 3}
+  m_Script: {fileID: 11500000, guid: 5524b536f2009af4bb4391ed6f70c26d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   lastingTime: 0
-  activating: 1
+  activating: 0
   radius: 0
   playerEnter:
     m_PersistentCalls:
@@ -31263,11 +31263,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 1012885853}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a56984309473b8544a6f647b016dcb0f, type: 3}
+  m_Script: {fileID: 11500000, guid: 5524b536f2009af4bb4391ed6f70c26d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   lastingTime: 0
-  activating: 1
+  activating: 0
   radius: 0
   playerEnter:
     m_PersistentCalls:
@@ -50158,11 +50158,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 1738705562}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: a56984309473b8544a6f647b016dcb0f, type: 3}
+  m_Script: {fileID: 11500000, guid: 5524b536f2009af4bb4391ed6f70c26d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   lastingTime: 0
-  activating: 1
+  activating: 0
   radius: 0
   playerEnter:
     m_PersistentCalls:

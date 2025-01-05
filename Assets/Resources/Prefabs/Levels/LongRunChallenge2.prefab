@@ -58,7 +58,7 @@ Transform:
   m_GameObject: {fileID: 4394210828827988617}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -4.47, y: 0.495, z: 0}
+  m_LocalPosition: {x: -4.47, y: -0.43, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -89,7 +89,7 @@ Transform:
   m_GameObject: {fileID: 6923682919932560059}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.997, y: 0, z: 0}
+  m_LocalPosition: {x: 0.997, y: -0.611, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -122,7 +122,7 @@ Transform:
   m_GameObject: {fileID: 7941685267581511092}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.5, y: -1.45, z: 1.73}
+  m_LocalPosition: {x: 0.4, y: 0, z: 1.73}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -181,7 +181,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 855864333236037055, guid: 51e24868d84709046b273ecd27c5025e, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -0.09
+      value: -0.1
       objectReference: {fileID: 0}
     - target: {fileID: 855864333236037055, guid: 51e24868d84709046b273ecd27c5025e, type: 3}
       propertyPath: m_LocalPosition.z
@@ -414,7 +414,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   distance: 1
   duration: 0.5
-  direction: {x: 0, y: 0, z: 1}
+  direction: {x: 0, y: 0, z: 2}
   cd: 0.5
   delay: 2
   ease: 13
@@ -544,7 +544,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   distance: -0.5
   duration: 0.5
-  direction: {x: 0, y: 1, z: 0}
+  direction: {x: 0, y: 2, z: 0}
   cd: 0.5
   delay: 0.5
   ease: 13
@@ -669,7 +669,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   distance: -0.5
   duration: 0.5
-  direction: {x: 0, y: 0, z: -1}
+  direction: {x: 0, y: 0, z: -2}
   cd: 0.5
   delay: 1
   ease: 13
@@ -789,7 +789,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   distance: -0.5
   duration: 0.5
-  direction: {x: 0, y: 1, z: 0}
+  direction: {x: 0, y: 2, z: 0}
   cd: 0.5
   delay: 1.5
   ease: 13
@@ -833,7 +833,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 855864333236037055, guid: 51e24868d84709046b273ecd27c5025e, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -0.09000003
+      value: -0.1
       objectReference: {fileID: 0}
     - target: {fileID: 855864333236037055, guid: 51e24868d84709046b273ecd27c5025e, type: 3}
       propertyPath: m_LocalPosition.z
@@ -1054,7 +1054,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   distance: -0.5
   duration: 0.5
-  direction: {x: 0, y: 1, z: 0}
+  direction: {x: 0, y: 2, z: 0}
   cd: 0.5
   delay: 1
   ease: 13
