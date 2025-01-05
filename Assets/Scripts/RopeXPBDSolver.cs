@@ -182,7 +182,6 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
             if (i < pointPos.Count() - 1)
                 ghostVels[i] =( vel[i] + vel[i+1])/2;
 
-            Enforce();
 
         }
     }
@@ -233,6 +232,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
                 ghostPrev[i] = ghostPos[i];
                 ghostPos[i] += ghostVels[i] * dt;
             }
+            Enforce();
 
         }
     }

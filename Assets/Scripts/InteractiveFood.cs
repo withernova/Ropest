@@ -10,7 +10,7 @@ public class InteractiveFood : InteractiveBase
     {
         if (isTriggered) return; 
         isTriggered = true;
-        blockingWall.DOMoveY(-0.89f, 2);
+        blockingWall.DOLocalMoveY(-0.89f, 2);
     }
 
     public override void OnUpdate(float deltaTime)

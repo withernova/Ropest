@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Serialization;
 
+[RequireComponent(typeof(Rigidbody))]
 public class RigidbodyXPBD : MonoBehaviour
 {
     public Vector3 linearVelocity;
