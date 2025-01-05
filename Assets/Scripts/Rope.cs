@@ -42,7 +42,7 @@ public class Rope : MonoBehaviour
     IEnumerator InitSolver()
     {
         solver = new RopeXPBDSolver();
-        solver.InitByMesh(ropeMesh, gravity, new RopeSolverInitData(subdivision, segments));
+        solver.InitByMesh(ropeMesh, gravity, new RopeSolverInitData(subdivision, segments, transform.GetChild(1).gameObject.AddComponent<CapsuleCollider>()));
         controlPoint.ctrl = solver;
         ready = true;
         yield break;

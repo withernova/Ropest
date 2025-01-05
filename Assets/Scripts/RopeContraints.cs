@@ -15,7 +15,7 @@ public class EdgeConstraint : Constraint
 
     public EdgeConstraint(RopeXPBDSolver solver) : base(solver)
     {
-        stiff = 0.00f;
+        stiff = 0.001f;
         this.solver = solver;
         this.length = solver.length;
 
@@ -667,3 +667,66 @@ public class BendingAndTwistingConstraint : Constraint
 //        solver.collisions.Clear();
 //    }
 //}
+
+public class DoubleDistanceConstraint : Constraint
+{
+    public RopeXPBDSolver solver;
+    float[] length;
+    const float EPSILON = 1e-6f;
+    float alpha;
+    private float[] lambdas0;
+
+    public DoubleDistanceConstraint(RopeXPBDSolver solver) : base(solver)
+    {
+        stiff = 0.1f;
+        this.solver = solver;
+        this.length = solver.length;
+
+        ResetLambda();
+    }
+
+    public override void ResetLambda()
+    {
+        lambdas0 = new float[2];
+    }
+
+    public override void SolveConstraint(float dt)
+    {
+        float deltaLambda;
+
+        alpha = stiff / (dt * dt);
+
+        int control = solver.ctrlIndex;
+
+        Vector3 dirLeft = solver.pointPos[control] - solver.pointPos[0];
+        Vector3 dirRight = solver.pointPos[control] - solver.pointPos[solver.pointPos.Length - 1];
+        float lenl = dirLeft.magnitude;
+        float lenr = dirRight.magnitude;
+
+        if (lenl > EPSILON)
+        {
+            float oriLen = 0f;
+            for (int i = 0; i < control - 1; i++)
+            {
+                oriLen += length[i];
+            }
+            deltaLambda = -((lenl - (oriLen) * 0.9f) + alpha * lambdas0[0]) / (1 + alpha);
+            lambdas0[0] += deltaLambda;
+
+            solver.pointPos[0] -= deltaLambda * dirLeft.normalized;
+        }
+
+        if (lenr > EPSILON)
+        {
+            float oriLen = 0f;
+            for (int i = control; i < solver.pointPos.Length - 1; i++)
+            {
+                oriLen += length[i];
+            }
+            deltaLambda = -((lenl - (oriLen) * 0.9f) + alpha * lambdas0[1]) / (1 + alpha);
+            lambdas0[1] += deltaLambda;
+
+            solver.pointPos[1] -= deltaLambda * dirRight.normalized;
+        }
+    }
+}
