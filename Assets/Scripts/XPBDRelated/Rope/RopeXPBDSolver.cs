@@ -231,7 +231,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
 
 
             prevPos[i] = pointPos[i];
-            Vector3.ClampMagnitude(vel[i],new Vector3(0.4f,0.4f,0.4f).magnitude);
+            Vector3.ClampMagnitude(vel[i], new Vector3(0.4f, 0.4f, 0.4f).magnitude);
             pointPos[i] += vel[i] * dt;
 
             //pointPos[i] = Vector3.Lerp(pointPos[i], pointPos[i] + vel[i] * dt, 0.8f);
@@ -281,27 +281,22 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         pointPos[grabPoint] = trans.InverseTransformPoint(grabPos);
     }
 
-    int swing = -1;
-    private Vector3 enforceMove = new Vector3();
 
     public void Enforce(int i)
     {
-        if (enforceMove.magnitude > 1e-6f && i == swing)
+        if (PointData.datas[i].interactiveItem is InteractiveSwing)
         {
-            pointPos[i] = Vector3.Lerp(pointPos[i], enforceMove, 0.2f);
-            move = Vector3.zero;
-            if ((enforceMove - pointPos[i]).magnitude < 1e-4)
+            var item = PointData.datas[i];
+            pointPos[item.index] = Vector3.Lerp(pointPos[item.index], item.interactiveItem.transform.position, 0.2f);
+            if ((item.interactiveItem.transform.position - pointPos[item.index]).magnitude < 1e-4)
             {
-                pointPos[i] = enforceMove;
-                enforceMove = new Vector3();
-                swing = -1;
+                pointPos[item.index] = item.interactiveItem.transform.position;
             }
-            pointInvMass[i] = 0;
         }
 
         if (stop)
         {
-            vel[ctrlIndex] = Vector3.Lerp(vel[ctrlIndex],Vector3.zero,0.3f);
+            vel[ctrlIndex] = Vector3.Lerp(vel[ctrlIndex], Vector3.zero, 0.3f);
             stop = false;
         }
 
@@ -323,11 +318,9 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         }
 
         if (target == null) return;
+        pointInvMass[ctrlIndex] = 0;
         PointData.datas[ctrlIndex].SetActive(target);
-        swing = ctrlIndex;
-        enforceMove = target.transform.position;
         target.OnStart();
-        Debug.Log(enforceMove);
     }
 
     public void Stop()
@@ -391,7 +384,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         {
             i = pointPos.Length - 1;
         }
-        
+
         if (!PointData.datas[ctrlIndex].isActivating)
         {
             pointInvMass[ctrlIndex] = PointData.datas[ctrlIndex].originMass;

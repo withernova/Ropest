@@ -29,6 +29,8 @@ public class MapManager : MonoBehaviour
             "Levels/LongRunChallenge2",
             "Levels/Throw_Hard_1_Chanllenge",
             "Levels/ThrowChanllenge",
+            "Levels/RotateClambChanllenge",
+            "Levels/RotateClambChanllenge2",
         };
 
         for (int i = 0; i < 3; i++)
