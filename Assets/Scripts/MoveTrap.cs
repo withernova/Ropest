@@ -15,9 +15,9 @@ public class MoveTrap : MonoBehaviour
     {
         Sequence seq = DOTween.Sequence();//
         seq.AppendInterval(delay);
-        seq.Append(transform.DOMove(transform.position + distance * direction, duration));
+        seq.Append(transform.DOLocalMove(transform.localPosition + distance * direction, duration));
         seq.AppendInterval(cd);
-        seq.Append(transform.DOMove(transform.position, duration));
+        seq.Append(transform.DOLocalMove(transform.localPosition, duration));
         seq.SetLoops(-1).SetEase(ease);
     }
 }

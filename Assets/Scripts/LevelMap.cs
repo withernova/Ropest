@@ -21,6 +21,10 @@ public class LevelMap : MonoBehaviour
         dropMapCountDown = TimerManager.instance.CreateTimer(lastTime, 1, () => MapManager.Instance.DropMap(this));
         droped = false;
         transform.position = new Vector3(transform.position.x, 0);
+
+        Material mat = MapManager.Instance.materials[Random.Range(0, MapManager.Instance.materials.Count)];
+        transform.Find("object").GetComponentsInChildren<MeshRenderer>().ToList().ForEach(x => x.material = mat);
+
         //GetComponentsInChildren<InteractiveBase>().ToList().ForEach(inter => inter.EndInteractive());
     }
 
@@ -49,11 +53,13 @@ public class LevelMap : MonoBehaviour
 
     private void OnTriggerExit(Collider other)
     {
-        if (other.gameObject.CompareTag("Player") && !droped)
+        if (other.gameObject.CompareTag("Player") && other.transform.position.x < GetLasPos().x)
         {
             //dropMapCountDown.LastTime = Mathf.Min(dropMapCountDown.LastTime, 1f);
             dropMapCountDown.Stop();
             MapManager.Instance.DropMap(this);
+            other.transform.parent.GetComponent<Rope>().solver.ReleaseAll();
+            other.transform.parent.GetComponentInChildren<PlayerController>().score += 1;
         }
     }
 }
