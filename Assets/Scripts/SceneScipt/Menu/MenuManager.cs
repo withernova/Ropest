@@ -23,4 +23,9 @@ public class MenuManager : MonoBehaviour
     {
         SceneManager.LoadScene("KUMO");
     }
+
+    public void Menu()
+    {
+        SceneManager.LoadScene("Menu");
+    }
 }
