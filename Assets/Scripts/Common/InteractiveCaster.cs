@@ -72,7 +72,7 @@ public class InteractiveCaster : MonoBehaviour
         var res = inCondition.ToList().OrderBy(item => (item.transform.position - transform.position).magnitude);
         //Debug.Log(res.Count());
         //Debug.Log(inCondition.Count() + "a" + res.Count());
-        if(res.Count() > 0 && (transform.position - res.First().transform.position).magnitude < res.First().GetComponent<InteractiveBase>().radius)
+        if(res.Count() > 0 && res.First().GetComponent<InteractiveBase>().radius != 0 && (transform.position - res.First().transform.position).magnitude < res.First().GetComponent<InteractiveBase>().radius)
         {
             inCD = true;
             tickCD.Start();
