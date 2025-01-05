@@ -33955,8 +33955,8 @@ GameObject:
   - component: {fileID: 5772683090860517656}
   - component: {fileID: 8006798853320811078}
   - component: {fileID: 728709983309065480}
-  - component: {fileID: 8375675854096415672}
-  m_Layer: 0
+  - component: {fileID: 8007870988203055712}
+  m_Layer: 7
   m_Name: grabbableBar
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -34082,19 +34082,6 @@ Rigidbody:
   m_Interpolate: 0
   m_Constraints: 0
   m_CollisionDetection: 0
---- !u!114 &8375675854096415672
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 4768804340623130914, guid: 5697e8f5fd7119b49bdb95bb2de3d721, type: 3}
-  m_PrefabInstance: {fileID: 3191795961579416904}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 6006229269674753560}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0d46a8c55d38ebc40856db4d70d47867, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  handlers: []
 --- !u!1 &6007732846290435292
 GameObject:
   m_ObjectHideFlags: 0
@@ -48233,5 +48220,23 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 3472678166332625310, guid: 5697e8f5fd7119b49bdb95bb2de3d721, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 8007870988203055712}
   m_SourcePrefab: {fileID: 100100000, guid: 5697e8f5fd7119b49bdb95bb2de3d721, type: 3}
+--- !u!114 &8007870988203055712
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6006229269674753560}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 04373a49d784b774d961ab2645211620, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  lastingTime: 0
+  radius: 2
+  handlers: []
