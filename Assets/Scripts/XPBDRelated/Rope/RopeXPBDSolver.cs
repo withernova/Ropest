@@ -40,7 +40,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
     public float[] length;
 
     public float ghostDistance = 0.1f;
-    private float ctrlMass = 0.2f;
+    private float ctrlMass = 0.4f;
 
     public float gravityFactor = 1f;
     bool stop = false;

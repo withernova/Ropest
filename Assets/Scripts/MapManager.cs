@@ -8,6 +8,7 @@ public class MapManager : MonoBehaviour
     public static MapManager Instance;
     public List<string> maps;
     public List<LevelMap> previousMap;
+    public List<Material> materials;
 
     public void Awake()
     {
