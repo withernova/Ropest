@@ -6,8 +6,6 @@ using System.Xml.Serialization;
 using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.UIElements;
-using static UnityEditor.Progress;
-using static UnityEditor.Searcher.SearcherWindow.Alignment;
 
 public class RopeSolverInitData : SolverInitData
 {
@@ -231,7 +229,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
 
 
             prevPos[i] = pointPos[i];
-            Vector3.ClampMagnitude(vel[i], new Vector3(0.2f, 0.2f, 0.2f).magnitude);
+            vel[i] = Vector3.ClampMagnitude(vel[i], new Vector3(2.5f, 2.5f, 2.5f).magnitude);
             pointPos[i] += vel[i] * dt;
 
             //pointPos[i] = Vector3.Lerp(pointPos[i], pointPos[i] + vel[i] * dt, 0.8f);
