@@ -23,7 +23,6 @@ public class PlayerController : MonoBehaviour
 
     private void Update()
     {
-        //// 抓取等
         if (ctrl != null)
         {
             //Transform transform;

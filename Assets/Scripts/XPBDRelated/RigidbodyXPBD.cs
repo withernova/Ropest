@@ -8,13 +8,17 @@ public class RigidbodyXPBD : MonoBehaviour
 {
     public Vector3 linearVelocity;
     public Rigidbody rb;
-    public float mass = 1f; 
+    public float mass = 1f;
 
-
-    private void Start()
+    private void Awake()
     {
         rb = GetComponent<Rigidbody>();
         linearVelocity = Vector3.zero;
+
+    }
+
+    private void Start()
+    {
     }
     void Update()
     {

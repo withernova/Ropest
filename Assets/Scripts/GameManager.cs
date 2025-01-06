@@ -59,7 +59,7 @@ public class GameManager : MonoBehaviour
 
     public void PlayAgain()
     {
-        MapManager.Instance.previousMap.ForEach(a => ResourcesPool.Instance.ReturnOne(MapManager.Instance.maps[a.id], a.gameObject));
+        MapManager.Instance.previousMap.ForEach(a => Destroy(a.gameObject));
         MapManager.Instance.previousMap = new List<LevelMap>();
         SceneManager.LoadScene("Menu");
     }

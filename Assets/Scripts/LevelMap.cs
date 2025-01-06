@@ -12,20 +12,21 @@ public class LevelMap : MonoBehaviour
     public int id;
     public Timer dropMapCountDown;
     public bool droped;
+    public int hardLevel;
 
     public virtual void Init(int i, int lastTime)
     {
         id = i;
-        time = lastTime;
+        time = hardLevel * 20;
         dropMapCountDown?.Stop();
-        dropMapCountDown = TimerManager.instance.CreateTimer(lastTime, 1, () => MapManager.Instance.DropMap(this));
+        dropMapCountDown = TimerManager.instance.CreateTimer(time, 1, () => MapManager.Instance.DropMap(this));
         droped = false;
         transform.position = new Vector3(transform.position.x, -1);
 
         Material mat = MapManager.Instance.materials[Random.Range(0, MapManager.Instance.materials.Count)];
         transform.Find("object").GetComponentsInChildren<MeshRenderer>().ToList().ForEach(x => x.material = mat);
 
-        //GetComponentsInChildren<InteractiveBase>().ToList().ForEach(inter => inter.EndInteractive());
+        GetComponentsInChildren<InteractiveBase>().ToList().ForEach(inter => inter.EndInteractive());
     }
 
     public Vector3 GetLasPos()

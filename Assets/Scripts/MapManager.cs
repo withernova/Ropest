@@ -50,7 +50,7 @@ public class MapManager : MonoBehaviour
         } while (previousMap.Any(map => map.id == id));
 
         string path = maps[id];
-        GameObject map = ResourcesPool.Instance.Load(path, 2);
+        GameObject map = Instantiate(Resources.Load<GameObject>("Prefabs/" + path));
       
         LevelMap levelMap = map.GetComponent<LevelMap>();
         //TODO: 详细时间实现
@@ -78,7 +78,7 @@ public class MapManager : MonoBehaviour
         }
         map.transform.DOMoveY(-10, 3f).onComplete += () =>
         {
-            ResourcesPool.Instance.ReturnOne(maps[map.id], map.gameObject);
+            Destroy(map.gameObject);
         };
     }
 }
