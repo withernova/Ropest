@@ -26018,6 +26018,7 @@ MonoBehaviour:
   time: 0
   id: 0
   droped: 0
+  hardLevel: 1
 --- !u!65 &8268375217473427505
 BoxCollider:
   m_ObjectHideFlags: 0
@@ -27819,7 +27820,7 @@ MonoBehaviour:
   angles:
   - {x: 0, y: 360, z: 0}
   cds:
-  - 2
+  - 1
   times:
   - 5
 --- !u!1 &6334213362616418662

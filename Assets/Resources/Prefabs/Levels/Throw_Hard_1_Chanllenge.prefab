@@ -11638,6 +11638,7 @@ MonoBehaviour:
   time: 0
   id: 0
   droped: 0
+  hardLevel: 2
   toReset:
   - {fileID: 5019868221534373750}
   - {fileID: 3836129967550212548}

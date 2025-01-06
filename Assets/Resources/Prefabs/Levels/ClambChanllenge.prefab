@@ -18412,6 +18412,7 @@ MonoBehaviour:
   time: 0
   id: 0
   droped: 0
+  hardLevel: 1
 --- !u!65 &775421249864292265
 BoxCollider:
   m_ObjectHideFlags: 0
