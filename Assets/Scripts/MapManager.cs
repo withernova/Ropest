@@ -76,7 +76,7 @@ public class MapManager : MonoBehaviour
         {
             SpawnMap();
         }
-        map.transform.DOMoveY(-10, 3f).onComplete += () =>
+        map.transform.DOShakeRotation(1, 5, 5).onComplete += () => map.transform.DOMoveY(-10, 3f).onComplete += () =>
         {
             Destroy(map.gameObject);
         };

@@ -11,6 +11,7 @@ public class LevelMap : MonoBehaviour
     public int time;
     public int id;
     public Timer dropMapCountDown;
+    public Timer onDropMap;
     public bool droped;
     public int hardLevel;
 

@@ -1,6 +1,7 @@
 using System;
 using Cinemachine;
 using NUnit.Framework;
+using Unity.VisualScripting;
 using UnityEngine;
 
 public class PlayerController : MonoBehaviour
@@ -78,6 +79,11 @@ public class PlayerController : MonoBehaviour
             }
         }
 
+        if(transform.position.y < -5)
+        {
+            //Debug.Log(transform.position.y);
+            GameManager.Instance.OnGameOver();
+        }
     }
 
     private void FixedUpdate()

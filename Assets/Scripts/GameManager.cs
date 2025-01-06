@@ -19,7 +19,7 @@ public class GameManager : MonoBehaviour
     public CinemachineFreeLook cam;
     public int score;
     public TextMeshProUGUI scoreTextUI;
-
+    bool gameOver;
     private void Awake()
     {
         Instance = this;
@@ -53,6 +53,8 @@ public class GameManager : MonoBehaviour
 
     public void OnGameOver()
     {
+        if (gameOver) return; 
+        gameOver = true;
         rope.GetComponent<Rope>().solver.ReleaseAll();
         defeatedUI.transform.DoPageAnimation(AnimationType.PumpOnce, true);
         scoreTextUI.text = score.ToString();
