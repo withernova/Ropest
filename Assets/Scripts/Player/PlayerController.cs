@@ -20,26 +20,43 @@ public class PlayerController : MonoBehaviour
         caster.condition += item => !item.activating;
         //groundCheckCollider = GetComponent<SphereCollider>();
     }
+    InteractiveGrab showGrab;
+    InteractiveSwing showSwing;
+
 
     private void Update()
     {
+        InteractiveGrab show1 = caster.TriggerInteractiveUndeploy<InteractiveGrab>();
+        if(show1 != showGrab) {
+            if (showGrab != null) showGrab.outline.enabled = false;
+            showGrab = show1;
+            if (show1 != null) show1.outline.enabled = true;
+        }
+        InteractiveSwing show2 = caster.TriggerInteractiveUndeploy<InteractiveSwing>();
+        if (showSwing != show2)
+        {
+            if(showSwing != null) showSwing.outline.enabled = false;
+            showSwing = show2;
+            if (show2 != null) show2.outline.enabled = true;
+        }
+
         if (ctrl != null)
         {
             //Transform transform;
 
             if (Input.GetKeyDown(KeyCode.E))
             {
-                InteractiveGrab interactive = caster.TriggerInteractiveUndeploy<InteractiveGrab>();
-                Debug.Log(interactive);
+                //InteractiveGrab interactive = caster.TriggerInteractiveUndeploy<InteractiveGrab>();
+                //Debug.Log(interactive);
 
-                ctrl.Grab(interactive);
+                ctrl.Grab(showGrab);
 
             }
 
             if (Input.GetKeyDown(KeyCode.Q))
             {
-                InteractiveSwing interactive = caster.TriggerInteractiveUndeploy<InteractiveSwing>();
-                ctrl.Swing(interactive);
+                //InteractiveSwing interactive = caster.TriggerInteractiveUndeploy<InteractiveSwing>();
+                ctrl.Swing(showSwing);
             }
 
             if (Input.GetKeyDown(KeyCode.R))
@@ -60,6 +77,7 @@ public class PlayerController : MonoBehaviour
                 ctrl.Stop();
             }
         }
+
     }
 
     private void FixedUpdate()

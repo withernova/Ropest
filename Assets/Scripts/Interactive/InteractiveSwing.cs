@@ -1,8 +1,15 @@
+using OutlineFx;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class InteractiveSwing : InteractiveBase
 {
+    private void Awake()
+    {
+        outline = gameObject.GetComponent<Outline>();
+        outline.Color = Color.red;
+        outline.enabled = false;
+    }
     public override void OnStart()
     {
         activating = true;

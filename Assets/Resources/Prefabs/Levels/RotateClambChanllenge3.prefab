@@ -2311,6 +2311,7 @@ GameObject:
   - component: {fileID: 5444228759829828237}
   - component: {fileID: 9009171357109995121}
   - component: {fileID: 8704297662681435701}
+  - component: {fileID: 3024220545611412995}
   m_Layer: 7
   m_Name: Tile_Center_Foundation (10)
   m_TagString: Untagged
@@ -2422,6 +2423,20 @@ MonoBehaviour:
   lastingTime: 0
   activating: 0
   radius: 0.2
+  outline: {fileID: 0}
+--- !u!114 &3024220545611412995
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 711406742884373167}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4218d78ef2d54d0898b7514e121a781f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _color: {r: 1, g: 1, b: 1, a: 1}
 --- !u!1 &721270738974043029
 GameObject:
   m_ObjectHideFlags: 0
@@ -4349,6 +4364,7 @@ GameObject:
   - component: {fileID: 7215466920922480684}
   - component: {fileID: 1406991927916401631}
   - component: {fileID: 5115618711964194574}
+  - component: {fileID: 3154090929593905704}
   m_Layer: 7
   m_Name: Tile_Center_Foundation (5)
   m_TagString: Untagged
@@ -4460,6 +4476,20 @@ MonoBehaviour:
   lastingTime: 0
   activating: 0
   radius: 0.2
+  outline: {fileID: 0}
+--- !u!114 &3154090929593905704
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1034863366706983953}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4218d78ef2d54d0898b7514e121a781f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _color: {r: 1, g: 1, b: 1, a: 1}
 --- !u!1 &1036678594667423321
 GameObject:
   m_ObjectHideFlags: 0
@@ -9334,6 +9364,7 @@ GameObject:
   - component: {fileID: 7224681194484774834}
   - component: {fileID: 713043793984348658}
   - component: {fileID: 8993514288054157716}
+  - component: {fileID: 7067318851569738339}
   m_Layer: 7
   m_Name: Tile_Center_Foundation (11)
   m_TagString: Untagged
@@ -9445,6 +9476,20 @@ MonoBehaviour:
   lastingTime: 0
   activating: 0
   radius: 0.2
+  outline: {fileID: 0}
+--- !u!114 &7067318851569738339
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2174437271761843031}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4218d78ef2d54d0898b7514e121a781f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _color: {r: 1, g: 1, b: 1, a: 1}
 --- !u!1 &2200854086088863684
 GameObject:
   m_ObjectHideFlags: 0
@@ -13206,6 +13251,7 @@ GameObject:
   - component: {fileID: 7456529021465480289}
   - component: {fileID: 6808040102002241900}
   - component: {fileID: 5256519010358464779}
+  - component: {fileID: 8558933473816607663}
   m_Layer: 7
   m_Name: Tile_Center_Foundation (9)
   m_TagString: Untagged
@@ -13317,6 +13363,20 @@ MonoBehaviour:
   lastingTime: 0
   activating: 0
   radius: 0.2
+  outline: {fileID: 0}
+--- !u!114 &8558933473816607663
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2827608769244008113}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4218d78ef2d54d0898b7514e121a781f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _color: {r: 1, g: 1, b: 1, a: 1}
 --- !u!1 &2862553173829668113
 GameObject:
   m_ObjectHideFlags: 0
@@ -20484,6 +20544,7 @@ GameObject:
   - component: {fileID: 6323270294854892623}
   - component: {fileID: 885707157871680719}
   - component: {fileID: 8557343422897272978}
+  - component: {fileID: 2800641442416787148}
   m_Layer: 7
   m_Name: Tile_Center_Foundation (7)
   m_TagString: Untagged
@@ -20595,6 +20656,20 @@ MonoBehaviour:
   lastingTime: 0
   activating: 0
   radius: 0.2
+  outline: {fileID: 0}
+--- !u!114 &2800641442416787148
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4614660196325534060}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4218d78ef2d54d0898b7514e121a781f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _color: {r: 1, g: 1, b: 1, a: 1}
 --- !u!1 &4639344841856593876
 GameObject:
   m_ObjectHideFlags: 0
@@ -21155,6 +21230,7 @@ GameObject:
   - component: {fileID: 791030830708689311}
   - component: {fileID: 1412191307210724534}
   - component: {fileID: 6764576854615321117}
+  - component: {fileID: 3182759762642663995}
   m_Layer: 7
   m_Name: Tile_Center_Foundation (6)
   m_TagString: Untagged
@@ -21266,6 +21342,20 @@ MonoBehaviour:
   lastingTime: 0
   activating: 0
   radius: 0.2
+  outline: {fileID: 0}
+--- !u!114 &3182759762642663995
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4776633821217796826}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4218d78ef2d54d0898b7514e121a781f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _color: {r: 1, g: 1, b: 1, a: 1}
 --- !u!1 &4777676544254062314
 GameObject:
   m_ObjectHideFlags: 0
@@ -22344,6 +22434,7 @@ GameObject:
   - component: {fileID: 5977310838047620180}
   - component: {fileID: 405339289819229193}
   - component: {fileID: 8104025775790773191}
+  - component: {fileID: 8514245880154793580}
   m_Layer: 7
   m_Name: Tile_Center_Foundation (12)
   m_TagString: Untagged
@@ -22455,6 +22546,20 @@ MonoBehaviour:
   lastingTime: 0
   activating: 0
   radius: 0.2
+  outline: {fileID: 0}
+--- !u!114 &8514245880154793580
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5005489266011000026}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4218d78ef2d54d0898b7514e121a781f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _color: {r: 1, g: 1, b: 1, a: 1}
 --- !u!1 &5008177659247781565
 GameObject:
   m_ObjectHideFlags: 0
@@ -23156,6 +23261,7 @@ GameObject:
   - component: {fileID: 85150587158377345}
   - component: {fileID: 6550864736864872567}
   - component: {fileID: 6452874791895627364}
+  - component: {fileID: 6438025857445865050}
   m_Layer: 7
   m_Name: Tile_Center_Foundation (8)
   m_TagString: Untagged
@@ -23267,6 +23373,20 @@ MonoBehaviour:
   lastingTime: 0
   activating: 0
   radius: 0.2
+  outline: {fileID: 0}
+--- !u!114 &6438025857445865050
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5155829574164550580}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4218d78ef2d54d0898b7514e121a781f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _color: {r: 1, g: 1, b: 1, a: 1}
 --- !u!1 &5171790050358459143
 GameObject:
   m_ObjectHideFlags: 0

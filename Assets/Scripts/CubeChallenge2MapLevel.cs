@@ -12,7 +12,7 @@ public class CubeChallenge2MapLevel : LevelMap
         toReset.ForEach(t => { value.Add(t.localPosition); });
     }
 
-    public override void Init(int i, int lastTime)
+    public override void Init(int i)
     {
         for (int j = 0; j < toReset.Count; j++)
         {
@@ -22,6 +22,6 @@ public class CubeChallenge2MapLevel : LevelMap
             toReset[j].position = value[j] += transform.position;
             TimerManager.instance.CreateAndStartTimer(1f, 1, () => rigidbody.GetComponent<Rigidbody>().isKinematic = false);
         }
-        base.Init(i, lastTime);
+        base.Init(i);
     }
 }

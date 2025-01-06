@@ -62,7 +62,7 @@ public class MapManager : MonoBehaviour
         {
             levelMap.SetBeginningPos(1);
         }
-        levelMap.Init(id, 100);
+        levelMap.Init(id);
 
 
         previousMap.Add(levelMap);

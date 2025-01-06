@@ -23,6 +23,8 @@ public class InteractiveCaster : MonoBehaviour
     public float lastTriggerTime;
     Timer tickCD;
 
+    List<Collider> inside = new List<Collider>();
+
     private void Start()
     {
         tickCD = TimerManager.instance.CreateAndStartTimer(interactiveCD, 1, () => inCD = false);
@@ -30,7 +32,7 @@ public class InteractiveCaster : MonoBehaviour
 
     private void Update()
     {
-        //var a = Physics.OverlapSphere(transform.position, interactiveRadios, interactiveLayerMask);
+        var a = Physics.OverlapSphere(transform.position, interactiveRadios, interactiveLayerMask);
         if(interactiveType == InteractiveType.Contact)
         {
             ConstantInteractive(Time.deltaTime);
@@ -41,6 +43,13 @@ public class InteractiveCaster : MonoBehaviour
             LastInteractive();
         }
 
+        //var newInside = a.ToList().Where(item => item.GetComponent<InteractiveBase>() != null && (item.GetComponent<InteractiveBase>().radius == 0 || (item.transform.position - transform.position).magnitude < item.GetComponent<InteractiveBase>().radius));
+
+        //newInside.Where(item => !inside.Contains(item))
+        //    .ToList().ForEach(item => { if (item.GetComponent<InteractiveBase>().outline != null) item.GetComponent<InteractiveBase>().outline.enabled = true; inside.Add(item); });
+
+        //inside.Where(item => !newInside.Contains(item.GetComponent<Collider>())).ToList().ForEach(item => { if (item.GetComponent<InteractiveBase>().outline != null) item.GetComponent<InteractiveBase>().outline.enabled = false; });
+        //inside = a.Where(item => item.GetComponent<InteractiveBase>() != null && (item.GetComponent<InteractiveBase>().radius == 0 || (item.transform.position - transform.position).magnitude < item.GetComponent<InteractiveBase>().radius)).ToList();
         //高亮物体
         //UIManager.instance.showInteractiveUI(a.Length > 0);
     }

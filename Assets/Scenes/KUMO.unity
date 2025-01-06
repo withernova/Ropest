@@ -369,6 +369,7 @@ MonoBehaviour:
   lastingTime: 0
   activating: 1
   radius: 0
+  outline: {fileID: 0}
   playerDead:
     m_PersistentCalls:
       m_Calls:
@@ -468,7 +469,7 @@ Transform:
   m_GameObject: {fileID: 705349779}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: -5.9, y: -3.18, z: -4.6}
+  m_LocalPosition: {x: -5.9, y: -3.18, z: -8}
   m_LocalScale: {x: 40.34459, y: 40.34459, z: 40.34459}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -818,7 +819,7 @@ MonoBehaviour:
   isUseTimer: 1
   respawnPoint: {fileID: 1164415544}
   defeatedUI: {fileID: 1567249768}
-  deadPlane: {fileID: 0}
+  deadPlane: {fileID: 705349784}
   cam: {fileID: 1528307376}
   score: 0
   scoreTextUI: {fileID: 1890354185}

@@ -1,3 +1,4 @@
+using OutlineFx;
 using UnityEngine;
 
 public class InteractiveGrab : InteractiveBase
@@ -7,6 +8,9 @@ public class InteractiveGrab : InteractiveBase
     private void Awake()
     {
         rigidbodyXPBD = GetComponent<RigidbodyXPBD>();
+        outline = gameObject.GetComponent<Outline>();
+        outline.Color = Color.green;
+        outline.enabled = false;
     }
 
     public float GetMass()
@@ -36,4 +40,5 @@ public class InteractiveGrab : InteractiveBase
         rigidbodyXPBD.rb.linearVelocity = rigidbodyXPBD.linearVelocity;
         activating= false;
     }
+
 }

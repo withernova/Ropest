@@ -14,7 +14,7 @@ public class LevelMap : MonoBehaviour
     public bool droped;
     public int hardLevel;
 
-    public virtual void Init(int i, int lastTime)
+    public virtual void Init(int i)
     {
         id = i;
         time = hardLevel * 20;
@@ -26,7 +26,7 @@ public class LevelMap : MonoBehaviour
         Material mat = MapManager.Instance.materials[Random.Range(0, MapManager.Instance.materials.Count)];
         transform.Find("object").GetComponentsInChildren<MeshRenderer>().ToList().ForEach(x => x.material = mat);
 
-        GetComponentsInChildren<InteractiveBase>().ToList().ForEach(inter => inter.EndInteractive());
+        //GetComponentsInChildren<InteractiveBase>().ToList().ForEach(inter => inter.EndInteractive());
     }
 
     public Vector3 GetLasPos()

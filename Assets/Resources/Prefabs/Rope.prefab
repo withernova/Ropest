@@ -46,7 +46,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8b1406c944cd08b4ebf6c39066e91a06, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  gravity: {x: 0, y: -9.8, z: 0}
+  gravity: {x: 0, y: -6, z: 0}
   simulate: 1
   length: 1
   segments: 16

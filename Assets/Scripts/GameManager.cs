@@ -47,20 +47,19 @@ public class GameManager : MonoBehaviour
 
         if(null != deadPlane)
         {
-            deadPlane.transform.position = new Vector3(rope.transform.position.x, rope.transform.position.y, -5);
+            deadPlane.transform.position = new Vector3(rope.transform.position.x, -5, rope.transform.position.z);
         }
     }
 
     public void OnGameOver()
     {
+        rope.GetComponent<Rope>().solver.ReleaseAll();
         defeatedUI.transform.DoPageAnimation(AnimationType.PumpOnce, true);
         scoreTextUI.text = score.ToString();
     }
 
     public void PlayAgain()
     {
-        MapManager.Instance.previousMap.ForEach(a => Destroy(a.gameObject));
-        MapManager.Instance.previousMap = new List<LevelMap>();
         SceneManager.LoadScene("Menu");
     }
 }
