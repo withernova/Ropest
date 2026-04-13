@@ -18,7 +18,10 @@ public class PlayerController : MonoBehaviour
     {
         caster = GetComponent<InteractiveCaster>();
 
-        caster.condition += item => !item.activating;
+        if (caster)
+        {
+            caster.condition += item => !item.activating;
+        }
         //groundCheckCollider = GetComponent<SphereCollider>();
     }
     InteractiveGrab showGrab;
