@@ -221,7 +221,8 @@ public partial class XPBDCollisionSystem : SystemBase
             ComponentType.ReadWrite<ParticlePosition>(),
             ComponentType.ReadWrite<ParticlePrevPosition>(),
             ComponentType.ReadWrite<ParticleVelocity>(),
-            ComponentType.ReadOnly<ParticleInvMass>()
+            ComponentType.ReadOnly<ParticleInvMass>(),
+            ComponentType.ReadOnly<ClothEdge>()
         );
     }
 
