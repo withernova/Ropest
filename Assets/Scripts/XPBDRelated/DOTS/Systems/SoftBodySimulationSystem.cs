@@ -5,28 +5,32 @@ using Unity.Jobs;
 using Unity.Mathematics;
 
 /// <summary>
-/// Cloth XPBD模拟系统 - 在FixedStep中运行
-/// 调度顺序：ResetLambda -> PreSolve -> [SubSteps: Distance + SelfCollision + AnalyticalCollision] -> PostSolve
-/// 场景碰撞使用解析碰撞（球体/Box），在SubStep内与约束交替迭代
+/// SoftBody XPBD模拟系统 - 在FixedStep中运行
+/// 调度顺序：ResetLambda -> PreSolve -> [SubSteps: Distance + Volume + AnalyticalCollision] -> PostSolve
+/// 可变形软体使用四面体体积约束 + 边距离约束来维持形状
+/// 不需要自碰撞：距离约束+体积约束已足够防止自身穿模
 /// </summary>
 [UpdateInGroup(typeof(FixedStepSimulationSystemGroup))]
-public partial struct ClothSimulationSystem : ISystem
+public partial struct SoftBodySimulationSystem : ISystem
 {
-    private EntityQuery _clothQuery;
+    private EntityQuery _softBodyQuery;
 
     public void OnCreate(ref SystemState state)
     {
-        _clothQuery = state.GetEntityQuery(
-            ComponentType.ReadOnly<ClothTag>(),
-            ComponentType.ReadOnly<ClothSolverConfig>(),
+        _softBodyQuery = state.GetEntityQuery(
+            ComponentType.ReadOnly<SoftBodyTag>(),
+            ComponentType.ReadOnly<SoftBodySolverConfig>(),
             ComponentType.ReadWrite<ParticlePosition>(),
             ComponentType.ReadWrite<ParticlePrevPosition>(),
             ComponentType.ReadWrite<ParticleVelocity>(),
             ComponentType.ReadOnly<ParticleInvMass>(),
-            ComponentType.ReadWrite<ClothEdge>(),
-            ComponentType.ReadWrite<ClothDistanceLambda>()
+            ComponentType.ReadWrite<SoftBodyEdge>(),
+            ComponentType.ReadWrite<SoftBodyDistanceLambda>(),
+            ComponentType.ReadWrite<Tetrahedron>(),
+            ComponentType.ReadWrite<TetrahedronRestVolume>(),
+            ComponentType.ReadWrite<TetrahedronVolumeLambda>()
         );
-        state.RequireForUpdate(_clothQuery);
+        state.RequireForUpdate(_softBodyQuery);
     }
 
     public void OnUpdate(ref SystemState state)
@@ -34,30 +38,34 @@ public partial struct ClothSimulationSystem : ISystem
         float dt = SystemAPI.Time.DeltaTime;
         if (dt <= 0f) return;
 
-        var entities = _clothQuery.ToEntityArray(Allocator.Temp);
+        var entities = _softBodyQuery.ToEntityArray(Allocator.Temp);
 
         for (int e = 0; e < entities.Length; e++)
         {
             var entity = entities[e];
-            var cfg = state.EntityManager.GetComponentData<ClothSolverConfig>(entity);
+            var cfg = state.EntityManager.GetComponentData<SoftBodySolverConfig>(entity);
             int numParticles = cfg.NumParticles;
 
             var positions = state.EntityManager.GetBuffer<ParticlePosition>(entity);
 
-            // 数据有效性检查：Buffer可能还未被填充
+            // 数据有效性检查
             if (positions.Length == 0 || numParticles <= 0) continue;
 
             var prevPositions = state.EntityManager.GetBuffer<ParticlePrevPosition>(entity);
             var velocities = state.EntityManager.GetBuffer<ParticleVelocity>(entity);
             var invMasses = state.EntityManager.GetBuffer<ParticleInvMass>(entity);
-            var edges = state.EntityManager.GetBuffer<ClothEdge>(entity);
-            var lambdas = state.EntityManager.GetBuffer<ClothDistanceLambda>(entity);
+            var edges = state.EntityManager.GetBuffer<SoftBodyEdge>(entity);
+            var distLambdas = state.EntityManager.GetBuffer<SoftBodyDistanceLambda>(entity);
+            var tets = state.EntityManager.GetBuffer<Tetrahedron>(entity);
+            var tetRestVols = state.EntityManager.GetBuffer<TetrahedronRestVolume>(entity);
+            var volLambdas = state.EntityManager.GetBuffer<TetrahedronVolumeLambda>(entity);
 
             var posArr = positions.Reinterpret<float3>().AsNativeArray();
             var prevArr = prevPositions.Reinterpret<float3>().AsNativeArray();
             var velArr = velocities.Reinterpret<float3>().AsNativeArray();
             var invMassArr = invMasses.Reinterpret<float>().AsNativeArray();
-            var lambdaArr = lambdas.Reinterpret<float>().AsNativeArray();
+            var distLambdaArr = distLambdas.Reinterpret<float>().AsNativeArray();
+            var volLambdaArr = volLambdas.Reinterpret<float>().AsNativeArray();
 
             // 提取边数据到临时NativeArray
             int edgeCount = edges.Length;
@@ -73,15 +81,35 @@ public partial struct ClothSimulationSystem : ISystem
                 restLengths[i] = edge.RestLength;
             }
 
-            // === 1. 重置Lambda ===
-            var resetJob = new ClothResetLambdaJob
+            // 提取四面体数据到临时NativeArray
+            int tetCount = tets.Length;
+            var tetI0 = new NativeArray<int>(tetCount, Allocator.TempJob);
+            var tetI1 = new NativeArray<int>(tetCount, Allocator.TempJob);
+            var tetI2 = new NativeArray<int>(tetCount, Allocator.TempJob);
+            var tetI3 = new NativeArray<int>(tetCount, Allocator.TempJob);
+            var restVolumes = new NativeArray<float>(tetCount, Allocator.TempJob);
+
+            for (int i = 0; i < tetCount; i++)
             {
-                Lambdas = lambdaArr
-            };
-            var resetHandle = resetJob.Schedule(edgeCount, 64, state.Dependency);
+                var tet = tets[i];
+                tetI0[i] = tet.I0;
+                tetI1[i] = tet.I1;
+                tetI2[i] = tet.I2;
+                tetI3[i] = tet.I3;
+                restVolumes[i] = tetRestVols[i].Value;
+            }
+
+            // === 1. 重置Lambda ===
+            var resetDistJob = new SoftBodyResetDistanceLambdaJob { Lambdas = distLambdaArr };
+            var resetDistHandle = resetDistJob.Schedule(edgeCount, 64, state.Dependency);
+
+            var resetVolJob = new SoftBodyResetVolumeLambdaJob { Lambdas = volLambdaArr };
+            var resetVolHandle = resetVolJob.Schedule(tetCount, 64, state.Dependency);
+
+            var resetHandle = JobHandle.CombineDependencies(resetDistHandle, resetVolHandle);
 
             // === 2. PreSolve ===
-            var preSolveJob = new ClothPreSolveJob
+            var preSolveJob = new SoftBodyPreSolveJob
             {
                 Positions = posArr,
                 PrevPositions = prevArr,
@@ -92,67 +120,53 @@ public partial struct ClothSimulationSystem : ISystem
             };
             var preSolveHandle = preSolveJob.Schedule(numParticles, 64, resetHandle);
 
-            // === 3. SubSteps: Distance Constraint + 自碰撞 + 解析碰撞 ===
-            // 创建空间哈希表（容量 = 粒子数 * 2 避免哈希冲突）
-            var spatialHashMap = new NativeParallelMultiHashMap<int, int>(numParticles * 2, Allocator.TempJob);
-
-            // 获取解析碰撞体数据（从全局管理器）
+            // === 3. SubSteps: Distance + Volume + 解析碰撞 ===
             var colliderData = AnalyticalColliderManager.GetColliderDataForJobs(Allocator.TempJob);
 
             JobHandle constraintHandle = preSolveHandle;
             for (int step = 0; step < cfg.NumSubSteps; step++)
             {
-                var distJob = new ClothDistanceConstraintJob
+                // 距离约束
+                var distJob = new SoftBodyDistanceConstraintJob
                 {
                     Positions = posArr,
                     InvMasses = invMassArr,
                     EdgeIndexA = edgeIndexA,
                     EdgeIndexB = edgeIndexB,
                     RestLengths = restLengths,
-                    Lambdas = lambdaArr,
+                    Lambdas = distLambdaArr,
                     Stiffness = cfg.DistanceStiffness,
                     Dt = dt
                 };
                 constraintHandle = distJob.Schedule(constraintHandle);
 
-                // 自碰撞：每隔2个SubStep做一次（平衡性能与效果）
-                if (step % 2 == 0)
+                // 体积约束
+                var volJob = new SoftBodyVolumeConstraintJob
                 {
-                    float cellSize = math.max(cfg.CollisionRadius * 2f, 0.01f);
+                    Positions = posArr,
+                    InvMasses = invMassArr,
+                    TetI0 = tetI0,
+                    TetI1 = tetI1,
+                    TetI2 = tetI2,
+                    TetI3 = tetI3,
+                    RestVolumes = restVolumes,
+                    Lambdas = volLambdaArr,
+                    Stiffness = cfg.VolumeStiffness,
+                    Dt = dt
+                };
+                constraintHandle = volJob.Schedule(constraintHandle);
 
-                    // 第一步：构建空间哈希表（单线程）
-                    var buildHashJob = new BuildSpatialHashJob
-                    {
-                        Positions = posArr,
-                        HashMap = spatialHashMap,
-                        CellSize = cellSize,
-                        NumParticles = numParticles
-                    };
-                    constraintHandle = buildHashJob.Schedule(constraintHandle);
-
-                    // 第二步：自碰撞检测与双向修正（IJob单线程，保证双向修正正确性）
-                    var selfCollisionJob = new ClothSelfCollisionJob
-                    {
-                        Positions = posArr,
-                        InvMasses = invMassArr,
-                        HashMap = spatialHashMap,
-                        MinDistance = cfg.CollisionRadius,
-                        CellSize = cellSize,
-                        Subdivision = cfg.Subdivision + 1,
-                        NumParticles = numParticles
-                    };
-                    constraintHandle = selfCollisionJob.Schedule(constraintHandle);
-                }
-
-                // 解析碰撞：每个SubStep都做，与约束交替迭代
+                // 解析碰撞
                 if (colliderData.Length > 0)
                 {
-                    var analyticalCollisionJob = new ClothAnalyticalCollisionJob
+                    var analyticalCollisionJob = new SoftBodyAnalyticalCollisionJob
                     {
                         Positions = posArr,
+                        PrevPositions = prevArr,
                         InvMasses = invMassArr,
                         Colliders = colliderData,
                         ParticleRadius = cfg.CollisionRadius,
+                        Friction = cfg.Friction,
                         NumParticles = numParticles
                     };
                     constraintHandle = analyticalCollisionJob.Schedule(constraintHandle);
@@ -160,7 +174,7 @@ public partial struct ClothSimulationSystem : ISystem
             }
 
             // === 4. PostSolve（含阻尼） ===
-            var postSolveJob = new ClothPostSolveJob
+            var postSolveJob = new SoftBodyPostSolveJob
             {
                 Positions = posArr,
                 PrevPositions = prevArr,
@@ -176,7 +190,11 @@ public partial struct ClothSimulationSystem : ISystem
             edgeIndexA.Dispose(postSolveHandle);
             edgeIndexB.Dispose(postSolveHandle);
             restLengths.Dispose(postSolveHandle);
-            spatialHashMap.Dispose(postSolveHandle);
+            tetI0.Dispose(postSolveHandle);
+            tetI1.Dispose(postSolveHandle);
+            tetI2.Dispose(postSolveHandle);
+            tetI3.Dispose(postSolveHandle);
+            restVolumes.Dispose(postSolveHandle);
             colliderData.Dispose(postSolveHandle);
 
             state.Dependency = postSolveHandle;

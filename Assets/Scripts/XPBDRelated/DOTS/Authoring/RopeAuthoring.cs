@@ -24,10 +24,14 @@ public class RopeAuthoring : MonoBehaviour
 
     [Header("求解器参数")]
     [Range(1, 20)] public int numSubSteps = 6;
+    // XPBD compliance (α)，值越小越硬。Edge 原版默认 0.0001（几乎刚性），BendTwist 原版默认 0.6（较软，用来稳定弯扭）。
     [Range(0f, 1f)] public float edgeStiffness = 0.0001f;
+    [Range(0f, 10f)] public float bendTwistStiffness = 0.6f;
+    // BendTwist 的刚度缩放系数 Ks（Position-based Elastic Rods 论文公式中的 Ks），原版默认 0.8。
     [Range(0f, 1f)] public float bendTwistKs = 0.8f;
     public float ghostDistance = 0.1f;
     public float gravityFactor = 1f;
+    [Range(0f, 1f)] public float friction = 0.3f;
 
     class Baker : Baker<RopeAuthoring>
     {
@@ -98,7 +102,9 @@ public class RopeAuthoring : MonoBehaviour
                 GravityFactor = authoring.gravityFactor,
                 Gravity = authoring.gravity,
                 EdgeStiffness = authoring.edgeStiffness,
-                BendTwistKs = authoring.bendTwistKs
+                BendTwistStiffness = authoring.bendTwistStiffness,
+                BendTwistKs = authoring.bendTwistKs,
+                Friction = authoring.friction
             });
 
             // === 添加Buffers ===

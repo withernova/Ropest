@@ -26,6 +26,14 @@ public struct RopePreSolvePointJob : IJobParallelFor
             return;
         }
 
+        // NaN安全检查：如果位置或速度已经是NaN，重置为安全值
+        if (math.any(math.isnan(PointPos[i])) || math.any(math.isnan(Vel[i])))
+        {
+            Vel[i] = float3.zero;
+            PrevPos[i] = PointPos[i];
+            return;
+        }
+
         float3 vel = Vel[i];
         vel += Gravity * GravityFactor * Dt;
 
@@ -110,8 +118,24 @@ public struct RopeEdgeConstraintJob : IJob
         const float EPSILON = 1e-6f;
         float alpha = Stiffness / (Dt * Dt);
 
-        for (int i = 0; i < NumPoints - 1; i++)
+        // === 论文 §6 Fig.7: Bilateral interleaving order ===
+        // 双向交错顺序以避免顺序诱导的自激振荡：
+        // 从两端向中间交错推进，而不是简单的 0,1,2,...,N-1 顺序。
+        // 对 numEdges = NumPoints - 1 条边，访问顺序为:
+        //   0, numEdges-1, 1, numEdges-2, 2, numEdges-3, ...
+        int numEdges = NumPoints - 1;
+        for (int step = 0; step < numEdges; step++)
         {
+            int i;
+            int half = step >> 1;                 // step / 2
+            if ((step & 1) == 0) i = half;         // 偶数步：从左端向中间
+            else i = numEdges - 1 - half;          // 奇数步：从右端向中间
+
+            // NaN安全检查：阻断NaN传播
+            if (math.any(math.isnan(PointPos[i])) || math.any(math.isnan(PointPos[i + 1])) ||
+                math.any(math.isnan(GhostPos[i])))
+                continue;
+
             // === 约束1：相邻点距离约束 ===
             float3 dir = PointPos[i] - PointPos[i + 1];
             float len = math.length(dir);
@@ -139,11 +163,19 @@ public struct RopeEdgeConstraintJob : IJob
 
             if (wSum > EPSILON)
             {
-                float deltaLambda = -(math.dot(p2pm, p1p0) + alpha * Lambda1[i]) / (wSum + alpha);
-                PointPos[i] += math.normalize(p0p2) * deltaLambda * PointInvMass[i];
-                PointPos[i + 1] += math.normalize(p2p1) * deltaLambda * PointInvMass[i + 1];
-                GhostPos[i] += math.normalize(p1p0) * deltaLambda * GhostInvMass[i];
-                Lambda1[i] += deltaLambda;
+                float p0p2_len = math.length(p0p2);
+                float p2p1_len = math.length(p2p1);
+                float p1p0_len = math.length(p1p0);
+
+                // 防止normalize零向量产生NaN
+                if (p0p2_len > EPSILON && p2p1_len > EPSILON && p1p0_len > EPSILON)
+                {
+                    float deltaLambda = -(math.dot(p2pm, p1p0) + alpha * Lambda1[i]) / (wSum + alpha);
+                    PointPos[i] += (p0p2 / p0p2_len) * deltaLambda * PointInvMass[i];
+                    PointPos[i + 1] += (p2p1 / p2p1_len) * deltaLambda * PointInvMass[i + 1];
+                    GhostPos[i] += (p1p0 / p1p0_len) * deltaLambda * GhostInvMass[i];
+                    Lambda1[i] += deltaLambda;
+                }
             }
 
             // === 约束3：Ghost点距离约束 ===
@@ -151,18 +183,23 @@ public struct RopeEdgeConstraintJob : IJob
 
             if (wSum > EPSILON)
             {
-                pm = 0.5f * (PointPos[i] + PointPos[i]); // 注意：原代码就是这样写的
+                pm = 0.5f * (PointPos[i] + PointPos[i + 1]); // 修复：原来错误地写成了 PointPos[i] + PointPos[i]
                 p2pm = GhostPos[i] - pm;
 
                 float p2pm_mag = math.length(p2pm);
-                float3 p2pm_dir = p2pm * (1.0f / p2pm_mag);
 
-                float deltaLambda = -(p2pm_mag - GhostDistance + alpha * Lambda2[i]) / (wSum + alpha);
+                // 防止除零产生NaN
+                if (p2pm_mag > EPSILON)
+                {
+                    float3 p2pm_dir = p2pm * (1.0f / p2pm_mag);
 
-                PointPos[i] -= 0.5f * PointInvMass[i] * deltaLambda * p2pm_dir;
-                PointPos[i + 1] -= 0.5f * PointInvMass[i + 1] * deltaLambda * p2pm_dir;
-                GhostPos[i] += 1.0f * GhostInvMass[i] * deltaLambda * p2pm_dir;
-                Lambda2[i] += deltaLambda;
+                    float deltaLambda = -(p2pm_mag - GhostDistance + alpha * Lambda2[i]) / (wSum + alpha);
+
+                    PointPos[i] -= 0.5f * PointInvMass[i] * deltaLambda * p2pm_dir;
+                    PointPos[i + 1] -= 0.5f * PointInvMass[i + 1] * deltaLambda * p2pm_dir;
+                    GhostPos[i] += 1.0f * GhostInvMass[i] * deltaLambda * p2pm_dir;
+                    Lambda2[i] += deltaLambda;
+                }
             }
         }
     }
@@ -193,16 +230,44 @@ public struct RopeBendTwistConstraintJob : IJob
     {
         float alpha = Stiffness / (Dt * Dt);
 
-        for (int idx = 0; idx < NumPoints - 2; idx++)
+        // === 论文 §6 Fig.7: Bilateral interleaving order ===
+        // 双向交错顺序避免顺序诱导振荡（"rod vibrates on its own"）。
+        // 对 numBend = NumPoints - 2 个 BendTwist 约束，访问顺序为:
+        //   0, numBend-1, 1, numBend-2, 2, numBend-3, ...
+        int numBend = NumPoints - 2;
+        for (int step = 0; step < numBend; step++)
         {
+            int idx;
+            int half = step >> 1;
+            if ((step & 1) == 0) idx = half;
+            else idx = numBend - 1 - half;
+
             float halfLength = RestLengths[0] / 2f;
+            if (halfLength < 1e-8f) continue;
+
+            // 检查输入是否包含NaN（防止NaN传播）
+            if (math.any(math.isnan(PointPos[idx])) || math.any(math.isnan(PointPos[idx + 1])) ||
+                math.any(math.isnan(PointPos[idx + 2])) || math.any(math.isnan(GhostPos[idx])) ||
+                math.any(math.isnan(GhostPos[idx + 1])))
+                continue;
+
+            // 检查退化情况：相邻点重合或Ghost点与线段共线
+            float len01 = math.length(PointPos[idx + 1] - PointPos[idx]);
+            float len12 = math.length(PointPos[idx + 2] - PointPos[idx + 1]);
+            if (len01 < 1e-6f || len12 < 1e-6f) continue;
 
             // 计算材料坐标系
             float3x3 a = ComputeMaterialFrame(PointPos[idx], PointPos[idx + 1], GhostPos[idx]);
             float3x3 b = ComputeMaterialFrame(PointPos[idx + 1], PointPos[idx + 2], GhostPos[idx + 1]);
 
+            // 如果材料坐标系退化（返回了identity），跳过此约束
+            // identity的c2（d3方向）为(0,0,1)，正常情况下不太可能恰好是这个值
+            // 更可靠的检查：验证frame的正交性
+            if (math.lengthsq(a.c0) < 0.5f || math.lengthsq(b.c0) < 0.5f) continue;
+
             // 计算Darboux向量
             float3 darboux = ComputeDarbouxVector(a, b, halfLength);
+            if (math.any(math.isnan(darboux))) continue;
 
             // 计算材料坐标系导数 dajpi[axis][point], dbjpi[axis][point]
             // axis: 0=d1, 1=d2, 2=d3; point: 0=p0, 1=p1, 2=p2(ghost)
@@ -265,6 +330,10 @@ public struct RopeBendTwistConstraintJob : IJob
             float3 rhs = -(C + alpha * Lambdas[idx]);
             float3 deltaLambda = math.mul(inv_factor, rhs);
 
+            // NaN安全检查：如果deltaLambda包含NaN或Inf，跳过此约束
+            if (math.any(math.isnan(deltaLambda)) || math.any(math.isinf(deltaLambda)))
+                continue;
+
             Lambdas[idx] += deltaLambda;
 
             // 计算位置修正
@@ -311,8 +380,16 @@ public struct RopeBendTwistConstraintJob : IJob
 
     static float3x3 ComputeMaterialFrame(float3 p1, float3 p2, float3 pg)
     {
-        float3 d3 = math.normalize(p2 - p1);
-        float3 d2 = math.normalize(math.cross(d3, pg - p1));
+        float3 diff = p2 - p1;
+        float diffLen = math.length(diff);
+        if (diffLen < 1e-8f) return float3x3.identity;
+
+        float3 d3 = diff / diffLen;
+        float3 crossVal = math.cross(d3, pg - p1);
+        float crossLen = math.length(crossVal);
+        if (crossLen < 1e-8f) return float3x3.identity;
+
+        float3 d2 = crossVal / crossLen;
         float3 d1 = math.cross(d2, d3);
         // 列存储：c0=d1, c1=d2, c2=d3
         return new float3x3(d1, d2, d3);
@@ -321,6 +398,10 @@ public struct RopeBendTwistConstraintJob : IJob
     static float3 ComputeDarbouxVector(float3x3 dA, float3x3 dB, float halfLength)
     {
         float factor = 1.0f + math.dot(dA.c0, dB.c0) + math.dot(dA.c1, dB.c1) + math.dot(dA.c2, dB.c2);
+
+        // 防止除零（当两个frame几乎反向时factor接近0）
+        if (math.abs(factor) < 1e-8f) return float3.zero;
+
         factor = 2.0f / (halfLength * factor);
 
         // permutation: {0,2,1}, {1,0,2}, {2,1,0}
@@ -341,6 +422,9 @@ public struct RopeBendTwistConstraintJob : IJob
         float3 p01 = p1 - p0;
         float length_p01 = math.length(p01);
 
+        // 防止除零
+        if (length_p01 < 1e-8f) length_p01 = 1e-8f;
+
         // d3p0 = (d3 * d3^T - I) / length_p01
         float3x3 d3outer = OuterProduct(d.c2, d.c2);
         d3p0 = new float3x3(
@@ -355,6 +439,9 @@ public struct RopeBendTwistConstraintJob : IJob
         float3 p02 = p2 - p0;
         float3 p01_cross_p02 = math.cross(p01, p02);
         float length_cross = math.length(p01_cross_p02);
+
+        // 防止除零
+        if (length_cross < 1e-8f) length_cross = 1e-8f;
 
         float3x3 d2outer = OuterProduct(d.c1, d.c1);
         float3x3 mat = new float3x3(
@@ -397,7 +484,10 @@ public struct RopeBendTwistConstraintJob : IJob
         omega_pe = float3x3.zero;
 
         float x = 1.0f + math.dot(da.c0, db.c0) + math.dot(da.c1, db.c1) + math.dot(da.c2, db.c2);
-        x = 2.0f / (halfLength * x);
+        float denom = halfLength * x;
+        // 防止除零
+        if (math.abs(denom) < 1e-8f) return;
+        x = 2.0f / denom;
 
         // 排列组合索引
         // c=0: i=0, j=2, k=1
@@ -574,6 +664,15 @@ public struct RopeBendTwistConstraintJob : IJob
 
     static float3x3 Inverse3x3(float3x3 m)
     {
+        // 先检查行列式，防止奇异矩阵导致NaN
+        float det = math.determinant(new float4x4(
+            new float4(m.c0, 0),
+            new float4(m.c1, 0),
+            new float4(m.c2, 0),
+            new float4(0, 0, 0, 1)
+        ));
+        if (math.abs(det) < 1e-10f) return float3x3.identity;
+
         // 使用math.inverse对float3x3
         // float3x3没有直接的inverse，需要转为float4x4
         float4x4 m4 = new float4x4(
@@ -584,6 +683,174 @@ public struct RopeBendTwistConstraintJob : IJob
         );
         float4x4 inv4 = math.inverse(m4);
         return new float3x3(inv4.c0.xyz, inv4.c1.xyz, inv4.c2.xyz);
+    }
+}
+
+// ============================================================
+// Rope 解析碰撞约束 Job（Burst 编译，SubStep 内运行）
+// ------------------------------------------------------------
+// 与 Cloth/SoftBody 使用同一套 AnalyticalColliderData，对 pointPos 的
+// 每个粒子做"球/盒推出"修正。只修改单个粒子位置，避免旧方案里
+// CapsuleCollider ComputePenetration 把相邻两个粒子一起平移导致的
+// 1) 相邻段叠加修正（同一粒子被推 2 次，朝法向猛窜）
+// 2) Job 未完成就读 posArr（数据竞争 → 抽搐/闪现）
+// 3) 碰撞后位置破坏绳长，下一帧 EdgeConstraint 弹回 → 抖动
+// ============================================================
+[BurstCompile]
+public struct RopeAnalyticalCollisionJob : IJob
+{
+    public NativeArray<float3> PointPos;
+    public NativeArray<float3> PrevPos;
+    [ReadOnly] public NativeArray<float> PointInvMass;
+    [ReadOnly] public NativeArray<AnalyticalColliderData> Colliders;
+    public float ParticleRadius;   // 绳子半径（cfg.Radius）
+    public float Friction;         // 摩擦系数（0=无摩擦，1=完全粘附）
+    public int NumPoints;
+
+    public void Execute()
+    {
+        // 静摩擦的切向位移阈值：按粒子半径的一个小比例
+        // 切向运动 < staticThresh 时视为"静止接触"，直接锁死 prev（粘附）
+        // 这解决了 BendTwist 约束把"弯曲势能"沿绳轴倾泻出来，导致绳子在平面上
+        // 朝绳方向滑动的问题——只要每 substep 切向漂移在阈值以内，就认为静止。
+        float staticThresh = math.max(ParticleRadius * 0.25f, 1e-3f);
+
+        for (int i = 0; i < NumPoints; i++)
+        {
+            if (PointInvMass[i] == 0f) continue;
+
+            float3 pos = PointPos[i];
+            if (math.any(math.isnan(pos))) continue;
+
+            float3 prev = PrevPos[i];
+
+            for (int c = 0; c < Colliders.Length; c++)
+            {
+                var col = Colliders[c];
+                float3 newPos = pos;
+                float3 hitNormal = float3.zero;
+                bool hit = false;
+
+                switch (col.Type)
+                {
+                    case AnalyticalColliderType.Sphere:
+                        hit = ResolveSphereCollision(pos, col.Center, col.Radius, ParticleRadius,
+                            out newPos, out hitNormal);
+                        break;
+                    case AnalyticalColliderType.Box:
+                        hit = ResolveBoxCollision(pos, col, ParticleRadius,
+                            out newPos, out hitNormal);
+                        break;
+                }
+
+                if (hit)
+                {
+                    pos = newPos;
+
+                    if (Friction > 0f)
+                    {
+                        // 注意：此时 pos 已经被推到接触面，disp 反映了"从上一步到当前
+                        // 接触后位置"的位移，包含了 PreSolve 的重力、Edge/BendTwist
+                        // 约束带来的位移之和。切向分量就是将在下一帧变成的"切向速度"
+                        // 来源，必须在这里处理掉，否则会因 BendTwist 回直导致绳子
+                        // 沿切向无休止地滑。
+                        float3 disp = pos - prev;
+                        float normalProj = math.dot(disp, hitNormal);
+                        float3 tangent = disp - normalProj * hitNormal;
+                        float tLen = math.length(tangent);
+
+                        if (tLen < staticThresh)
+                        {
+                            // 静摩擦粘附：切向"小位移"直接归零 → prev = pos。
+                            // 法向速度也一并置零（粒子贴面，既不穿透也不反弹）。
+                            prev = pos;
+                        }
+                        else
+                        {
+                            // 动摩擦：切向位移按 (1 - Friction) 衰减，法向分量保留。
+                            // 法向保留可以让绳子之后能自然离开接触面，避免"吸附到墙上"。
+                            float3 newTangent = tangent * (1f - Friction);
+                            float3 normalComp = normalProj * hitNormal;
+                            prev = pos - (newTangent + normalComp);
+                        }
+                    }
+                }
+            }
+
+            PointPos[i] = pos;
+            PrevPos[i] = prev;
+        }
+    }
+
+    static bool ResolveSphereCollision(float3 particlePos, float3 sphereCenter,
+        float sphereRadius, float particleRadius, out float3 newPos, out float3 normal)
+    {
+        float3 diff = particlePos - sphereCenter;
+        float dist = math.length(diff);
+        float minDist = sphereRadius + particleRadius;
+
+        if (dist < minDist)
+        {
+            if (dist > 1e-8f)
+            {
+                normal = diff / dist;
+            }
+            else
+            {
+                normal = new float3(0f, 1f, 0f);
+            }
+            newPos = sphereCenter + normal * minDist;
+            return true;
+        }
+
+        newPos = particlePos;
+        normal = float3.zero;
+        return false;
+    }
+
+    static bool ResolveBoxCollision(float3 particlePos, AnalyticalColliderData box,
+        float particleRadius, out float3 newPos, out float3 normal)
+    {
+        // 世界坐标 → Box 本地坐标
+        float3 localPos = math.mul(box.InvRotation, particlePos - box.Center);
+        float3 expandedHalf = box.HalfExtents + particleRadius;
+
+        if (math.abs(localPos.x) < expandedHalf.x &&
+            math.abs(localPos.y) < expandedHalf.y &&
+            math.abs(localPos.z) < expandedHalf.z)
+        {
+            float3 penetration = expandedHalf - math.abs(localPos);
+            float3 sign = math.sign(localPos);
+            // 防止 localPos 某轴为 0 导致 sign 为 0
+            if (sign.x == 0f) sign.x = 1f;
+            if (sign.y == 0f) sign.y = 1f;
+            if (sign.z == 0f) sign.z = 1f;
+
+            float3 localNormal;
+            if (penetration.x <= penetration.y && penetration.x <= penetration.z)
+            {
+                localPos.x = sign.x * expandedHalf.x;
+                localNormal = new float3(sign.x, 0f, 0f);
+            }
+            else if (penetration.y <= penetration.z)
+            {
+                localPos.y = sign.y * expandedHalf.y;
+                localNormal = new float3(0f, sign.y, 0f);
+            }
+            else
+            {
+                localPos.z = sign.z * expandedHalf.z;
+                localNormal = new float3(0f, 0f, sign.z);
+            }
+
+            newPos = math.mul(box.Rotation, localPos) + box.Center;
+            normal = math.mul(box.Rotation, localNormal);
+            return true;
+        }
+
+        newPos = particlePos;
+        normal = float3.zero;
+        return false;
     }
 }
 
@@ -657,15 +924,33 @@ public struct RopeRenderingJob : IJob
             float3 vm = 0.5f * (v1 + v2);
             float3 vml = 0.5f * (v2 + v3);
 
-            float3 d3f = math.normalize(v2 - v1);
-            float3 crossGhost = math.cross(d3f, math.normalize(GhostPos[e] - v1));
-            float3 d2f = math.normalize(crossGhost);
-            float3 d1f = math.normalize(math.cross(d2f, d3f));
+            float3 d3f_raw = v2 - v1;
+            float d3f_len = math.length(d3f_raw);
+            if (d3f_len < 1e-8f) continue; // 跳过退化段
+            float3 d3f = d3f_raw / d3f_len;
 
-            float3 d3l = math.normalize(v3 - v2);
-            float3 crossGhost2 = math.cross(d3l, math.normalize(GhostPos[e + 1] - v2));
-            float3 d2l = math.normalize(crossGhost2);
-            float3 d1l = math.normalize(math.cross(d2l, d3l));
+            float3 ghostDiff1 = GhostPos[e] - v1;
+            float ghostDiff1Len = math.length(ghostDiff1);
+            if (ghostDiff1Len < 1e-8f) continue;
+            float3 crossGhost = math.cross(d3f, ghostDiff1 / ghostDiff1Len);
+            float crossGhostLen = math.length(crossGhost);
+            if (crossGhostLen < 1e-8f) continue;
+            float3 d2f = crossGhost / crossGhostLen;
+            float3 d1f = math.cross(d2f, d3f);
+
+            float3 d3l_raw = v3 - v2;
+            float d3l_len = math.length(d3l_raw);
+            if (d3l_len < 1e-8f) continue;
+            float3 d3l = d3l_raw / d3l_len;
+
+            float3 ghostDiff2 = GhostPos[e + 1] - v2;
+            float ghostDiff2Len = math.length(ghostDiff2);
+            if (ghostDiff2Len < 1e-8f) continue;
+            float3 crossGhost2 = math.cross(d3l, ghostDiff2 / ghostDiff2Len);
+            float crossGhost2Len = math.length(crossGhost2);
+            if (crossGhost2Len < 1e-8f) continue;
+            float3 d2l = crossGhost2 / crossGhost2Len;
+            float3 d1l = math.cross(d2l, d3l);
 
             // 构建旋转矩阵
             float3x3 De1 = new float3x3(d1f, d2f, d3f);
@@ -687,6 +972,7 @@ public struct RopeRenderingJob : IJob
             }
 
             float le = math.length(vml - vm);
+            if (le < 1e-8f) continue; // 跳过退化段
             float segmentLength = le / (interpolations - 1);
 
             // 插值帧
@@ -703,11 +989,12 @@ public struct RopeRenderingJob : IJob
                 else
                 {
                     float r = (i * segmentLength) / le;
-                    float3 scaledTheta = theta * math.normalize(n) * r;
+                    float nLen = math.length(n);
+                    float3 scaledTheta = nLen > 1e-8f ? theta * (n / nLen) * r : float3.zero;
                     float mag = math.length(scaledTheta);
                     float cosR = math.cos(mag);
                     float sinR = math.sin(mag);
-                    float3 axis = math.normalize(scaledTheta);
+                    float3 axis = mag > 1e-8f ? scaledTheta / mag : new float3(1, 0, 0);
 
                     // Rodrigues旋转公式构建矩阵
                     float3x3 rotInterp = new float3x3(
@@ -723,7 +1010,9 @@ public struct RopeRenderingJob : IJob
                     );
 
                     interpolatedFrame = math.mul(rotInterp, De1);
-                    float3 d3 = math.normalize(interpolatedFrame.c2);
+                    float3 d3raw = interpolatedFrame.c2;
+                    float d3rawLen = math.length(d3raw);
+                    float3 d3 = d3rawLen > 1e-8f ? d3raw / d3rawLen : d3f;
                     currentPosition += d3 * segmentLength;
                 }
 
@@ -731,9 +1020,13 @@ public struct RopeRenderingJob : IJob
                 for (int j = 0; j < Subdivision; j++)
                 {
                     float angle = 2f * math.PI * j / Subdivision;
+                    float3 frameC0 = interpolatedFrame.c0;
+                    float frameC0Len = math.length(frameC0);
+                    float3 frameC1 = interpolatedFrame.c1;
+                    float frameC1Len = math.length(frameC1);
                     float3 vertex = currentPosition +
-                        Radius * (math.cos(angle) * math.normalize(interpolatedFrame.c0) +
-                                  math.sin(angle) * math.normalize(interpolatedFrame.c1));
+                        Radius * (math.cos(angle) * (frameC0Len > 1e-8f ? frameC0 / frameC0Len : new float3(1,0,0)) +
+                                  math.sin(angle) * (frameC1Len > 1e-8f ? frameC1 / frameC1Len : new float3(0,1,0)));
 
                     if (writeIndex < OutputVertices.Length)
                         OutputVertices[writeIndex++] = vertex;

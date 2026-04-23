@@ -129,86 +129,191 @@ public struct BuildSpatialHashJob : IJob
 }
 
 /// <summary>
-/// 第二步：基于空间哈希的自碰撞检测与修正（IJobParallelFor，并行处理每个粒子）
+/// 第二步：基于空间哈希的自碰撞检测与修正（IJob单线程，双向修正避免穿模）
 /// 每个粒子只查询自身所在cell及相邻26个cell
+/// 使用IJob保证双向修正的正确性，避免并行写入竞争
 /// </summary>
 [BurstCompile]
-public struct ClothSelfCollisionJob : IJobParallelFor
+public struct ClothSelfCollisionJob : IJob
 {
-    [NativeDisableParallelForRestriction]
     public NativeArray<float3> Positions;
     [ReadOnly] public NativeArray<float> InvMasses;
     [ReadOnly] public NativeParallelMultiHashMap<int, int> HashMap;
     public float MinDistance;
     public float CellSize;
     public int Subdivision;     // 每行的顶点数（sub+1），用于判断相邻关系
+    public int NumParticles;
 
-    public void Execute(int i)
+    public void Execute()
     {
-        if (InvMasses[i] == 0f) return;
-
-        float3 posI = Positions[i];
         float invCell = 1f / CellSize;
         float minDistSq = MinDistance * MinDistance;
 
-        // 当前粒子所在的cell坐标
-        int cx = (int)math.floor(posI.x * invCell);
-        int cy = (int)math.floor(posI.y * invCell);
-        int cz = (int)math.floor(posI.z * invCell);
-
-        float3 totalCorrection = float3.zero;
-        int correctionCount = 0;
-
-        // 遍历3x3x3邻域（27个cell）
-        for (int dx = -1; dx <= 1; dx++)
+        for (int i = 0; i < NumParticles; i++)
         {
-            for (int dy = -1; dy <= 1; dy++)
+            if (InvMasses[i] == 0f) continue;
+
+            float3 posI = Positions[i];
+
+            // 当前粒子所在的cell坐标
+            int cx = (int)math.floor(posI.x * invCell);
+            int cy = (int)math.floor(posI.y * invCell);
+            int cz = (int)math.floor(posI.z * invCell);
+
+            // 遍历3x3x3邻域（27个cell）
+            for (int dx = -1; dx <= 1; dx++)
             {
-                for (int dz = -1; dz <= 1; dz++)
+                for (int dy = -1; dy <= 1; dy++)
                 {
-                    int hash = (cx + dx) * 73856093 ^ (cy + dy) * 19349663 ^ (cz + dz) * 83492791;
-
-                    if (!HashMap.TryGetFirstValue(hash, out int j, out var it)) continue;
-
-                    do
+                    for (int dz = -1; dz <= 1; dz++)
                     {
-                        // 只处理 j > i 的对，避免重复处理
-                        if (j <= i) continue;
-                        if (InvMasses[j] == 0f) continue;
+                        int hash = (cx + dx) * 73856093 ^ (cy + dy) * 19349663 ^ (cz + dz) * 83492791;
 
-                        // 跳过网格拓扑上相邻的粒子
-                        int diff = math.abs(j - i);
-                        if (diff == 1 || diff == Subdivision || diff == Subdivision - 1 || diff == Subdivision + 1)
-                            continue;
+                        if (!HashMap.TryGetFirstValue(hash, out int j, out var it)) continue;
 
-                        float3 diff3 = posI - Positions[j];
-                        float distSq = math.lengthsq(diff3);
-
-                        if (distSq < minDistSq && distSq > 1e-12f)
+                        do
                         {
-                            float dist = math.sqrt(distSq);
-                            float3 dir = diff3 / dist;
-                            float overlap = MinDistance - dist;
+                            // 只处理 j > i 的对，避免重复处理
+                            if (j <= i) continue;
+                            if (InvMasses[j] == 0f) continue;
 
-                            float w0 = InvMasses[i];
-                            float w1 = InvMasses[j];
-                            float wSum = w0 + w1;
-                            if (wSum < 1e-8f) continue;
+                            // 跳过网格拓扑上相邻的粒子
+                            int diff = math.abs(j - i);
+                            if (diff == 1 || diff == Subdivision || diff == Subdivision - 1 || diff == Subdivision + 1)
+                                continue;
 
-                            // 累积修正量（并行安全：只修改自己的位置）
-                            totalCorrection += (w0 / wSum) * overlap * dir;
-                            correctionCount++;
-                        }
-                    } while (HashMap.TryGetNextValue(out j, ref it));
+                            float3 diff3 = Positions[i] - Positions[j];
+                            float distSq = math.lengthsq(diff3);
+
+                            if (distSq < minDistSq && distSq > 1e-12f)
+                            {
+                                float dist = math.sqrt(distSq);
+                                float3 dir = diff3 / dist;
+                                float overlap = MinDistance - dist;
+
+                                float w0 = InvMasses[i];
+                                float w1 = InvMasses[j];
+                                float wSum = w0 + w1;
+                                if (wSum < 1e-8f) continue;
+
+                                // 双向修正：两个粒子都被推开
+                                float3 corrI = (w0 / wSum) * overlap * dir;
+                                float3 corrJ = -(w1 / wSum) * overlap * dir;
+
+                                Positions[i] = Positions[i] + corrI;
+                                Positions[j] = Positions[j] + corrJ;
+                            }
+                        } while (HashMap.TryGetNextValue(out j, ref it));
+                    }
                 }
             }
         }
+    }
+}
 
-        // 应用累积修正
-        if (correctionCount > 0)
+// ============================================================
+// Cloth 解析碰撞约束 Job（Burst编译，在SubStep内运行）
+// 支持球体和Box碰撞体，纯数学运算，不依赖Unity Physics
+// ============================================================
+[BurstCompile]
+public struct ClothAnalyticalCollisionJob : IJob
+{
+    public NativeArray<float3> Positions;
+    [ReadOnly] public NativeArray<float> InvMasses;
+    [ReadOnly] public NativeArray<AnalyticalColliderData> Colliders;
+    public float ParticleRadius;    // 粒子碰撞半径
+    public int NumParticles;
+
+    public void Execute()
+    {
+        for (int i = 0; i < NumParticles; i++)
         {
-            Positions[i] = posI + totalCorrection;
+            if (InvMasses[i] == 0f) continue;
+
+            float3 pos = Positions[i];
+
+            for (int c = 0; c < Colliders.Length; c++)
+            {
+                var col = Colliders[c];
+
+                switch (col.Type)
+                {
+                    case AnalyticalColliderType.Sphere:
+                        pos = ResolveSphereCollision(pos, col.Center, col.Radius, ParticleRadius);
+                        break;
+                    case AnalyticalColliderType.Box:
+                        pos = ResolveBoxCollision(pos, col, ParticleRadius);
+                        break;
+                }
+            }
+
+            Positions[i] = pos;
         }
+    }
+
+    /// <summary>
+    /// 球体碰撞：将粒子推到球面外
+    /// </summary>
+    static float3 ResolveSphereCollision(float3 particlePos, float3 sphereCenter, float sphereRadius, float particleRadius)
+    {
+        float3 diff = particlePos - sphereCenter;
+        float dist = math.length(diff);
+        float minDist = sphereRadius + particleRadius;
+
+        if (dist < minDist && dist > 1e-8f)
+        {
+            float3 dir = diff / dist;
+            particlePos = sphereCenter + dir * minDist;
+        }
+        else if (dist <= 1e-8f)
+        {
+            // 粒子在球心，随便推一个方向
+            particlePos = sphereCenter + new float3(0, 1, 0) * minDist;
+        }
+
+        return particlePos;
+    }
+
+    /// <summary>
+    /// Box碰撞：将粒子推到Box表面外
+    /// 将粒子变换到Box局部空间，做AABB检测，再变换回世界空间
+    /// </summary>
+    static float3 ResolveBoxCollision(float3 particlePos, AnalyticalColliderData box, float particleRadius)
+    {
+        // 将粒子变换到Box局部空间
+        float3 localPos = math.mul(box.InvRotation, particlePos - box.Center);
+
+        // 扩展半尺寸（加上粒子半径）
+        float3 expandedHalf = box.HalfExtents + particleRadius;
+
+        // 检查是否在扩展Box内
+        if (math.abs(localPos.x) < expandedHalf.x &&
+            math.abs(localPos.y) < expandedHalf.y &&
+            math.abs(localPos.z) < expandedHalf.z)
+        {
+            // 找到最近的面并推出
+            float3 penetration = expandedHalf - math.abs(localPos);
+            float3 sign = math.sign(localPos);
+
+            // 选择穿透最浅的轴推出
+            if (penetration.x <= penetration.y && penetration.x <= penetration.z)
+            {
+                localPos.x = sign.x * expandedHalf.x;
+            }
+            else if (penetration.y <= penetration.x && penetration.y <= penetration.z)
+            {
+                localPos.y = sign.y * expandedHalf.y;
+            }
+            else
+            {
+                localPos.z = sign.z * expandedHalf.z;
+            }
+
+            // 变换回世界空间
+            particlePos = math.mul(box.Rotation, localPos) + box.Center;
+        }
+
+        return particlePos;
     }
 }
 

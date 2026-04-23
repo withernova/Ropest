@@ -28,6 +28,10 @@ public class ClothRuntimeSpawner : MonoBehaviour
     [Range(0.01f, 0.5f)] public float collisionRadius = 0.05f;
     [Range(0f, 1f)] public float friction = 0.4f;
 
+    [Header("渲染网格细分")]
+    [Tooltip("渲染网格细分迭代次数（0=不细分直接用模拟网格，1=4倍面数，2=16倍面数）")]
+    [Range(0, 3)] public int renderSubdivisionIterations = 1;
+
     [Header("固定点")]
     [Tooltip("固定的顶点索引列表（invMass设为0）")]
     public List<int> fixedVertices = new List<int>();
@@ -45,18 +49,54 @@ public class ClothRuntimeSpawner : MonoBehaviour
 
     void SpawnCloth()
     {
-        // 创建Mesh
-        clothMesh = CreateClothMesh();
+        // 创建模拟用Mesh（低面数）
+        var simMesh = CreateClothMesh();
+        var meshVertices = simMesh.vertices;
+        var meshTriangles = simMesh.triangles;
+        var meshUVs = simMesh.uv;
+        int numParticles = meshVertices.Length;
+
+        // 生成渲染用Mesh（支持细分高面数）
+        bool useSubdivision = renderSubdivisionIterations > 0;
+        Vector3[] renderVertices;
+        int[] renderTriangles;
+        Vector2[] renderUVs;
+        SubdivisionMeshHelper.BindingData[] bindingData = null;
+
+        if (useSubdivision)
+        {
+            // 细分的同时精确追踪每个顶点的重心坐标绑定（无搜索误差）
+            SubdivisionMeshHelper.SubdivideWithBindings(
+                meshVertices, meshTriangles, meshUVs, renderSubdivisionIterations,
+                out renderVertices, out renderTriangles, out renderUVs, out bindingData);
+
+            Debug.Log($"[Cloth] 细分渲染网格: 模拟顶点={numParticles}, 渲染顶点={renderVertices.Length}, " +
+                      $"模拟三角形={meshTriangles.Length / 3}, 渲染三角形={renderTriangles.Length / 3}");
+        }
+        else
+        {
+            renderVertices = meshVertices;
+            renderTriangles = meshTriangles;
+            renderUVs = meshUVs;
+        }
+
+        // 创建渲染Mesh
+        clothMesh = new Mesh();
+        clothMesh.name = "Cloth_DOTS_Runtime";
+        if (renderVertices.Length > 65535)
+            clothMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        clothMesh.SetVertices(new List<Vector3>(renderVertices));
+        clothMesh.SetTriangles(renderTriangles, 0);
+        if (renderUVs != null) clothMesh.uv = renderUVs;
+        clothMesh.RecalculateNormals();
+        clothMesh.RecalculateTangents();
+        clothMesh.RecalculateBounds();
 
         // 设置渲染
         var meshFilter = gameObject.AddComponent<MeshFilter>();
         var meshRenderer = gameObject.AddComponent<MeshRenderer>();
         meshFilter.mesh = clothMesh;
         meshRenderer.material = clothMaterial;
-
-        var meshVertices = clothMesh.vertices;
-        var meshTriangles = clothMesh.triangles;
-        int numParticles = meshVertices.Length;
 
         // 计算逆质量
         var invMasses = new float[numParticles];
@@ -106,7 +146,8 @@ public class ClothRuntimeSpawner : MonoBehaviour
         }
 
         // === 使用Archetype一次性创建Entity ===
-        var archetype = entityManager.CreateArchetype(
+        var componentTypes = new List<ComponentType>
+        {
             typeof(ClothTag),
             typeof(MeshUpdateTag),
             typeof(ClothSolverConfig),
@@ -116,8 +157,14 @@ public class ClothRuntimeSpawner : MonoBehaviour
             typeof(ParticleInvMass),
             typeof(ClothEdge),
             typeof(ClothDistanceLambda),
-            typeof(TriangleIndex)
-        );
+            typeof(TriangleIndex),
+            typeof(RenderMeshConfig)
+        };
+        if (useSubdivision)
+        {
+            componentTypes.Add(typeof(RenderVertexBinding));
+        }
+        var archetype = entityManager.CreateArchetype(componentTypes.ToArray());
 
         clothEntity = entityManager.CreateEntity(archetype);
 
@@ -164,7 +211,7 @@ public class ClothRuntimeSpawner : MonoBehaviour
             lambdaBuf.Add(new ClothDistanceLambda { Value = 0f });
         }
 
-        // 三角形索引
+        // 三角形索引（模拟三角形，用于绑定查找）
         var triBuf = entityManager.GetBuffer<TriangleIndex>(clothEntity);
         for (int i = 0; i < meshTriangles.Length; i += 3)
         {
@@ -174,6 +221,32 @@ public class ClothRuntimeSpawner : MonoBehaviour
                 I1 = meshTriangles[i + 1],
                 I2 = meshTriangles[i + 2]
             });
+        }
+
+        // 设置渲染网格配置
+        entityManager.SetComponentData(clothEntity, new RenderMeshConfig
+        {
+            NumRenderVertices = renderVertices.Length,
+            UseSubdivision = useSubdivision
+        });
+
+        // 填充渲染顶点绑定数据
+        if (useSubdivision && bindingData != null)
+        {
+            var bindBuf = entityManager.GetBuffer<RenderVertexBinding>(clothEntity);
+            for (int i = 0; i < bindingData.Length; i++)
+            {
+                var bd = bindingData[i];
+                bindBuf.Add(new RenderVertexBinding
+                {
+                    SimI0 = bd.SimI0,
+                    SimI1 = bd.SimI1,
+                    SimI2 = bd.SimI2,
+                    U = bd.U,
+                    V = bd.V,
+                    W = bd.W
+                });
+            }
         }
 
         // 托管Mesh引用（最后添加，唯一的额外结构性变更）

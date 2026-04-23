@@ -24,11 +24,15 @@ public class RopeRuntimeSpawner : MonoBehaviour
 
     [Header("求解器参数")]
     [Range(1, 20)] public int numSubSteps = 6;
+    // XPBD compliance (α)，值越小越硬。Edge 原版默认 0.0001，BendTwist 原版默认 0.6。
     [Range(0f, 1f)] public float edgeStiffness = 0.0001f;
+    [Range(0f, 10f)] public float bendTwistStiffness = 0.6f;
+    // BendTwist 刚度缩放系数 Ks（PBER 论文），原版默认 0.8。
     [Range(0f, 1f)] public float bendTwistKs = 0.8f;
     public float ghostDistance = 0.1f;
     public float gravityFactor = 1f;
     [Range(0f, 1f)] public float damping = 0.01f;
+    [Range(0f, 1f)] public float friction = 0.3f;
 
     private Entity ropeEntity;
     private EntityManager entityManager;
@@ -134,8 +138,10 @@ public class RopeRuntimeSpawner : MonoBehaviour
             GravityFactor = gravityFactor,
             Gravity = gravity,
             EdgeStiffness = edgeStiffness,
+            BendTwistStiffness = bendTwistStiffness,
             BendTwistKs = bendTwistKs,
-            Damping = damping
+            Damping = damping,
+            Friction = friction
         });
 
         // === 填充Buffer数据（此时不会触发结构性变更，因为Buffer已经存在） ===

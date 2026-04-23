@@ -42,6 +42,10 @@ public partial struct RopeSimulationSystem : ISystem
         float dt = SystemAPI.Time.DeltaTime;
         if (dt <= 0f) return;
 
+        // 拉取场景中的解析碰撞体（与 Cloth/SoftBody 相同的数据源）。
+        // 每帧拷一份供所有 Rope 共用，PostSolve 后再 Dispose。
+        var colliderData = AnalyticalColliderManager.GetColliderDataForJobs(Allocator.TempJob);
+
         var entities = _ropeQuery.ToEntityArray(Allocator.Temp);
 
         for (int e = 0; e < entities.Length; e++)
@@ -161,11 +165,30 @@ public partial struct RopeSimulationSystem : ISystem
                         RestLengths = restLenArr,
                         Lambdas = btLambdas,
                         BendTwistKs = cfg.BendTwistKs,
-                        Stiffness = cfg.EdgeStiffness,
+                        // 修复：BendTwist 必须有自己独立的 compliance（原版 RopeContraints.cs 中基类默认 stiff=0.6f）。
+                        // 先前错误地共用了 cfg.EdgeStiffness=0.0001f，导致 α 比原版小 ~6000 倍，
+                        // 约束过于刚性 → factor_matrix 数值病态 → 第2~4帧发散为 NaN/Inf，绳子消失。
+                        Stiffness = cfg.BendTwistStiffness,
                         Dt = dt,
                         NumPoints = numPoints
                     };
                     constraintHandle = bendJob.Schedule(constraintHandle);
+                }
+
+                // === 3c. 解析碰撞（每个 substep 内解一次，避免碰撞修正破坏 Edge 约束） ===
+                if (colliderData.Length > 0)
+                {
+                    var collisionJob = new RopeAnalyticalCollisionJob
+                    {
+                        PointPos = posArr,
+                        PrevPos = prevArr,
+                        PointInvMass = invMassArr,
+                        Colliders = colliderData,
+                        ParticleRadius = cfg.Radius,
+                        Friction = cfg.Friction,
+                        NumPoints = numPoints
+                    };
+                    constraintHandle = collisionJob.Schedule(constraintHandle);
                 }
             }
 
@@ -190,5 +213,9 @@ public partial struct RopeSimulationSystem : ISystem
         }
 
         entities.Dispose();
+
+        // colliderData 在所有 Rope 的 Job 完成后再释放；
+        // 由于每次 entity 循环都把依赖链挂到 state.Dependency，这里 Dispose(state.Dependency) 即可安全释放。
+        colliderData.Dispose(state.Dependency);
     }
 }

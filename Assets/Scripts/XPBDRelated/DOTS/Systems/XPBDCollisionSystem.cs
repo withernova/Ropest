@@ -49,10 +49,20 @@ public static class XPBDCollisionHelper
             Vector3 p0 = posArr[i];
             Vector3 p1 = posArr[i + 1];
 
+            // NaN安全检查：如果粒子位置已经是NaN，跳过碰撞处理
+            if (float.IsNaN(p0.x) || float.IsNaN(p0.y) || float.IsNaN(p0.z) ||
+                float.IsNaN(p1.x) || float.IsNaN(p1.y) || float.IsNaN(p1.z))
+                continue;
+
             Vector3 delta = p1 - p0;
+            float deltaMag = delta.magnitude;
+
+            // 防止两个粒子重合时产生NaN
+            if (deltaMag < 1e-6f) continue;
+
             _collisionHelper.transform.position = p0 + delta / 2f;
             _collisionHelper.transform.LookAt(p0);
-            _capsuleCollider.height = delta.magnitude + 2f * radius;
+            _capsuleCollider.height = deltaMag + 2f * radius;
 
             Collider[] overlaps = Physics.OverlapCapsule(p0, p1, radius + 0.02f, ~LayerMask.GetMask("Ignore Raycast"));
 
@@ -182,7 +192,9 @@ public static class XPBDCollisionHelper
             return;
         }
 
-        prevPos[i] += math.normalize(p1_p1) * 0.25f * distance;
+        float p1_p1_len = math.length(p1_p1);
+        if (p1_p1_len > 1e-8f)
+            prevPos[i] += (p1_p1 / p1_p1_len) * 0.25f * distance;
     }
 
     public static void Cleanup()
@@ -197,15 +209,16 @@ public static class XPBDCollisionHelper
 
 /// <summary>
 /// XPBD碰撞检测系统 - PostSolve后做一次场景碰撞修正
-/// 自碰撞由SubStep内的Burst Job处理，这里只处理与场景物体的碰撞
+/// Rope：仍使用Unity Physics API（CapsuleCollider + ComputePenetration）
+/// Cloth：已迁移到SubStep内的解析碰撞（ClothAnalyticalCollisionJob），此处不再处理
 /// </summary>
 [UpdateInGroup(typeof(FixedStepSimulationSystemGroup))]
 [UpdateAfter(typeof(RopeSimulationSystem))]
 [UpdateAfter(typeof(ClothSimulationSystem))]
+[UpdateAfter(typeof(SoftBodySimulationSystem))]
 public partial class XPBDCollisionSystem : SystemBase
 {
     private EntityQuery _ropeQuery;
-    private EntityQuery _clothQuery;
 
     protected override void OnCreate()
     {
@@ -214,15 +227,6 @@ public partial class XPBDCollisionSystem : SystemBase
             ComponentType.ReadOnly<RopeSolverConfig>(),
             ComponentType.ReadWrite<ParticlePosition>(),
             ComponentType.ReadWrite<ParticlePrevPosition>()
-        );
-        _clothQuery = GetEntityQuery(
-            ComponentType.ReadOnly<ClothTag>(),
-            ComponentType.ReadOnly<ClothSolverConfig>(),
-            ComponentType.ReadWrite<ParticlePosition>(),
-            ComponentType.ReadWrite<ParticlePrevPosition>(),
-            ComponentType.ReadWrite<ParticleVelocity>(),
-            ComponentType.ReadOnly<ParticleInvMass>(),
-            ComponentType.ReadOnly<ClothEdge>()
         );
     }
 
@@ -233,52 +237,13 @@ public partial class XPBDCollisionSystem : SystemBase
 
     protected override void OnUpdate()
     {
-        Dependency.Complete();
+        // Rope 场景碰撞已迁移到 RopeSimulationSystem 的 SubStep 内（RopeAnalyticalCollisionJob），此处不再处理。
+        // 旧路径使用 CapsuleCollider + Physics.ComputePenetration：
+        //   1) Dependency.Complete() 不能等待 ISystem 的 state.Dependency，存在数据竞争 → 抽搐；
+        //   2) ComputePenetration 返回的位移会同时作用于胶囊两端粒子，导致相邻段叠加修正 → 闪现；
+        //   3) 在所有 SubStep 完成后才处理，碰撞修正破坏绳长，下一帧 Edge 再弹回 → 抖动。
+        // 因此这里禁用对 Rope 的处理，统一改走解析碰撞。
 
-        // Rope场景碰撞
-        {
-            var entities = _ropeQuery.ToEntityArray(Allocator.Temp);
-            for (int e = 0; e < entities.Length; e++)
-            {
-                var entity = entities[e];
-                var cfg = EntityManager.GetComponentData<RopeSolverConfig>(entity);
-                var positions = EntityManager.GetBuffer<ParticlePosition>(entity);
-                var prevPositions = EntityManager.GetBuffer<ParticlePrevPosition>(entity);
-
-                if (positions.Length == 0 || cfg.NumPoints <= 0) continue;
-
-                var posArr = positions.Reinterpret<float3>().AsNativeArray();
-                var prevArr = prevPositions.Reinterpret<float3>().AsNativeArray();
-
-                XPBDCollisionHelper.HandleRopeCollision(posArr, prevArr, cfg.NumPoints, cfg.Radius);
-            }
-            entities.Dispose();
-        }
-
-        // Cloth场景碰撞
-        {
-            var entities = _clothQuery.ToEntityArray(Allocator.Temp);
-            for (int e = 0; e < entities.Length; e++)
-            {
-                var entity = entities[e];
-                var cfg = EntityManager.GetComponentData<ClothSolverConfig>(entity);
-                var positions = EntityManager.GetBuffer<ParticlePosition>(entity);
-                var prevPositions = EntityManager.GetBuffer<ParticlePrevPosition>(entity);
-                var invMasses = EntityManager.GetBuffer<ParticleInvMass>(entity);
-                var velocities = EntityManager.GetBuffer<ParticleVelocity>(entity);
-
-                if (positions.Length == 0 || cfg.NumParticles <= 0) continue;
-
-                var posArr = positions.Reinterpret<float3>().AsNativeArray();
-                var prevArr = prevPositions.Reinterpret<float3>().AsNativeArray();
-                var invMassArr = invMasses.Reinterpret<float>().AsNativeArray();
-                var velArr = velocities.Reinterpret<float3>().AsNativeArray();
-
-                // 碰撞修正（与老方案一致：一次碰撞修正 + 摩擦 + 速度更新）
-                XPBDCollisionHelper.HandleClothCollision(posArr, prevArr, velArr, invMassArr,
-                    cfg.NumParticles, cfg.CollisionRadius, cfg.Friction, SystemAPI.Time.DeltaTime);
-            }
-            entities.Dispose();
-        }
+        // Cloth场景碰撞已迁移到ClothSimulationSystem的SubStep内（ClothAnalyticalCollisionJob）
     }
 }
