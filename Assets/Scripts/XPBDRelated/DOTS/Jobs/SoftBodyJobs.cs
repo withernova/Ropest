@@ -57,15 +57,14 @@ public struct SoftBodyResetVolumeLambdaJob : IJobParallelFor
 // ============================================================
 // SoftBody DistanceConstraint Job（顺序依赖，使用IJob + Burst）
 // 与Cloth的距离约束完全一致
+// 直接消费 SoftBodyEdge 结构体 Buffer（零拷贝），避免每帧拆包成 int/float 数组。
 // ============================================================
 [BurstCompile]
 public struct SoftBodyDistanceConstraintJob : IJob
 {
     public NativeArray<float3> Positions;
     [ReadOnly] public NativeArray<float> InvMasses;
-    [ReadOnly] public NativeArray<int> EdgeIndexA;
-    [ReadOnly] public NativeArray<int> EdgeIndexB;
-    [ReadOnly] public NativeArray<float> RestLengths;
+    [ReadOnly] public NativeArray<SoftBodyEdge> Edges;
     public NativeArray<float> Lambdas;
     public float Stiffness; // compliance
     public float Dt;
@@ -74,10 +73,12 @@ public struct SoftBodyDistanceConstraintJob : IJob
     {
         float alpha = Stiffness / (Dt * Dt);
 
-        for (int i = 0; i < EdgeIndexA.Length; i++)
+        int edgeCount = Edges.Length;
+        for (int i = 0; i < edgeCount; i++)
         {
-            int id0 = EdgeIndexA[i];
-            int id1 = EdgeIndexB[i];
+            var edge = Edges[i];
+            int id0 = edge.IndexA;
+            int id1 = edge.IndexB;
 
             float w0 = InvMasses[id0];
             float w1 = InvMasses[id1];
@@ -88,7 +89,7 @@ public struct SoftBodyDistanceConstraintJob : IJob
             if (l == 0f) continue;
 
             float3 gradC = diff / l;
-            float l_rest = RestLengths[i];
+            float l_rest = edge.RestLength;
             float C = l - l_rest;
             float wTot = (w1 + w0) * math.lengthsq(gradC);
 
@@ -111,11 +112,8 @@ public struct SoftBodyVolumeConstraintJob : IJob
 {
     public NativeArray<float3> Positions;
     [ReadOnly] public NativeArray<float> InvMasses;
-    [ReadOnly] public NativeArray<int> TetI0;
-    [ReadOnly] public NativeArray<int> TetI1;
-    [ReadOnly] public NativeArray<int> TetI2;
-    [ReadOnly] public NativeArray<int> TetI3;
-    [ReadOnly] public NativeArray<float> RestVolumes;
+    [ReadOnly] public NativeArray<Tetrahedron> Tets;
+    [ReadOnly] public NativeArray<TetrahedronRestVolume> RestVolumes;
     public NativeArray<float> Lambdas;
     public float Stiffness; // compliance
     public float Dt;
@@ -124,12 +122,14 @@ public struct SoftBodyVolumeConstraintJob : IJob
     {
         float alpha = Stiffness / (Dt * Dt);
 
-        for (int t = 0; t < TetI0.Length; t++)
+        int tetCount = Tets.Length;
+        for (int t = 0; t < tetCount; t++)
         {
-            int i0 = TetI0[t];
-            int i1 = TetI1[t];
-            int i2 = TetI2[t];
-            int i3 = TetI3[t];
+            var tet = Tets[t];
+            int i0 = tet.I0;
+            int i1 = tet.I1;
+            int i2 = tet.I2;
+            int i3 = tet.I3;
 
             float3 p0 = Positions[i0];
             float3 p1 = Positions[i1];
@@ -142,7 +142,7 @@ public struct SoftBodyVolumeConstraintJob : IJob
             float3 d3 = p3 - p0;
             float vol = math.dot(d1, math.cross(d2, d3)) / 6f;
 
-            float restVol = RestVolumes[t];
+            float restVol = RestVolumes[t].Value;
             float C = vol - restVol;
 
             // 梯度：对每个顶点的位置求导

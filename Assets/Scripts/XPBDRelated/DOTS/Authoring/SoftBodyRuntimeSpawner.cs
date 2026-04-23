@@ -810,12 +810,13 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
     {
         Mesh mesh = new Mesh();
         mesh.name = "SoftBody_DOTS_Runtime";
+        mesh.MarkDynamic(); // 软体顶点每帧更新，使用Dynamic VBO避免GPU端重分配
 
         // 如果顶点数超过65535，使用32位索引
         if (verts.Length > 65535)
             mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
 
-        mesh.SetVertices(new List<Vector3>(verts));
+        mesh.SetVertices(verts);
         mesh.SetTriangles(triangles, 0);
         if (uvs != null)
             mesh.uv = uvs;

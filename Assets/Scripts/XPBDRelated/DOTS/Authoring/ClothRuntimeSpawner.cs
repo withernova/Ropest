@@ -83,9 +83,10 @@ public class ClothRuntimeSpawner : MonoBehaviour
         // 创建渲染Mesh
         clothMesh = new Mesh();
         clothMesh.name = "Cloth_DOTS_Runtime";
+        clothMesh.MarkDynamic(); // 每帧更新顶点，标记为Dynamic VBO
         if (renderVertices.Length > 65535)
             clothMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-        clothMesh.SetVertices(new List<Vector3>(renderVertices));
+        clothMesh.SetVertices(renderVertices);
         clothMesh.SetTriangles(renderTriangles, 0);
         if (renderUVs != null) clothMesh.uv = renderUVs;
         clothMesh.RecalculateNormals();
@@ -283,6 +284,7 @@ public class ClothRuntimeSpawner : MonoBehaviour
     {
         Mesh mesh = new Mesh();
         mesh.name = "Cloth_DOTS_Runtime";
+        mesh.MarkDynamic(); // 每帧更新顶点，标记为Dynamic VBO
         List<Vector3> vertices = new List<Vector3>();
         List<int> triangles = new List<int>();
         List<Vector2> uvs = new List<Vector2>();

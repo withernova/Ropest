@@ -59,19 +59,9 @@ public partial struct ClothSimulationSystem : ISystem
             var invMassArr = invMasses.Reinterpret<float>().AsNativeArray();
             var lambdaArr = lambdas.Reinterpret<float>().AsNativeArray();
 
-            // 提取边数据到临时NativeArray
+            // 零拷贝获取 ClothEdge Buffer（边数据是静态的，无需每帧重建NativeArray）
+            var edgeArr = edges.AsNativeArray();
             int edgeCount = edges.Length;
-            var edgeIndexA = new NativeArray<int>(edgeCount, Allocator.TempJob);
-            var edgeIndexB = new NativeArray<int>(edgeCount, Allocator.TempJob);
-            var restLengths = new NativeArray<float>(edgeCount, Allocator.TempJob);
-
-            for (int i = 0; i < edgeCount; i++)
-            {
-                var edge = edges[i];
-                edgeIndexA[i] = edge.IndexA;
-                edgeIndexB[i] = edge.IndexB;
-                restLengths[i] = edge.RestLength;
-            }
 
             // === 1. 重置Lambda ===
             var resetJob = new ClothResetLambdaJob
@@ -106,9 +96,7 @@ public partial struct ClothSimulationSystem : ISystem
                 {
                     Positions = posArr,
                     InvMasses = invMassArr,
-                    EdgeIndexA = edgeIndexA,
-                    EdgeIndexB = edgeIndexB,
-                    RestLengths = restLengths,
+                    Edges = edgeArr,
                     Lambdas = lambdaArr,
                     Stiffness = cfg.DistanceStiffness,
                     Dt = dt
@@ -172,10 +160,7 @@ public partial struct ClothSimulationSystem : ISystem
             };
             var postSolveHandle = postSolveJob.Schedule(numParticles, 64, constraintHandle);
 
-            // 释放临时数组
-            edgeIndexA.Dispose(postSolveHandle);
-            edgeIndexB.Dispose(postSolveHandle);
-            restLengths.Dispose(postSolveHandle);
+            // 释放临时数组（edgeArr 是零拷贝视图无需释放）
             spatialHashMap.Dispose(postSolveHandle);
             colliderData.Dispose(postSolveHandle);
 

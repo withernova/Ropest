@@ -67,37 +67,13 @@ public partial struct SoftBodySimulationSystem : ISystem
             var distLambdaArr = distLambdas.Reinterpret<float>().AsNativeArray();
             var volLambdaArr = volLambdas.Reinterpret<float>().AsNativeArray();
 
-            // 提取边数据到临时NativeArray
+            // 零拷贝获取结构体Buffer（edges/tets/restVols是静态数据，无需每帧重建NativeArray）
+            var edgeArr = edges.AsNativeArray();
+            var tetArr = tets.AsNativeArray();
+            var restVolArr = tetRestVols.AsNativeArray();
+
             int edgeCount = edges.Length;
-            var edgeIndexA = new NativeArray<int>(edgeCount, Allocator.TempJob);
-            var edgeIndexB = new NativeArray<int>(edgeCount, Allocator.TempJob);
-            var restLengths = new NativeArray<float>(edgeCount, Allocator.TempJob);
-
-            for (int i = 0; i < edgeCount; i++)
-            {
-                var edge = edges[i];
-                edgeIndexA[i] = edge.IndexA;
-                edgeIndexB[i] = edge.IndexB;
-                restLengths[i] = edge.RestLength;
-            }
-
-            // 提取四面体数据到临时NativeArray
             int tetCount = tets.Length;
-            var tetI0 = new NativeArray<int>(tetCount, Allocator.TempJob);
-            var tetI1 = new NativeArray<int>(tetCount, Allocator.TempJob);
-            var tetI2 = new NativeArray<int>(tetCount, Allocator.TempJob);
-            var tetI3 = new NativeArray<int>(tetCount, Allocator.TempJob);
-            var restVolumes = new NativeArray<float>(tetCount, Allocator.TempJob);
-
-            for (int i = 0; i < tetCount; i++)
-            {
-                var tet = tets[i];
-                tetI0[i] = tet.I0;
-                tetI1[i] = tet.I1;
-                tetI2[i] = tet.I2;
-                tetI3[i] = tet.I3;
-                restVolumes[i] = tetRestVols[i].Value;
-            }
 
             // === 1. 重置Lambda ===
             var resetDistJob = new SoftBodyResetDistanceLambdaJob { Lambdas = distLambdaArr };
@@ -131,9 +107,7 @@ public partial struct SoftBodySimulationSystem : ISystem
                 {
                     Positions = posArr,
                     InvMasses = invMassArr,
-                    EdgeIndexA = edgeIndexA,
-                    EdgeIndexB = edgeIndexB,
-                    RestLengths = restLengths,
+                    Edges = edgeArr,
                     Lambdas = distLambdaArr,
                     Stiffness = cfg.DistanceStiffness,
                     Dt = dt
@@ -145,11 +119,8 @@ public partial struct SoftBodySimulationSystem : ISystem
                 {
                     Positions = posArr,
                     InvMasses = invMassArr,
-                    TetI0 = tetI0,
-                    TetI1 = tetI1,
-                    TetI2 = tetI2,
-                    TetI3 = tetI3,
-                    RestVolumes = restVolumes,
+                    Tets = tetArr,
+                    RestVolumes = restVolArr,
                     Lambdas = volLambdaArr,
                     Stiffness = cfg.VolumeStiffness,
                     Dt = dt
@@ -186,15 +157,7 @@ public partial struct SoftBodySimulationSystem : ISystem
             };
             var postSolveHandle = postSolveJob.Schedule(numParticles, 64, constraintHandle);
 
-            // 释放临时数组
-            edgeIndexA.Dispose(postSolveHandle);
-            edgeIndexB.Dispose(postSolveHandle);
-            restLengths.Dispose(postSolveHandle);
-            tetI0.Dispose(postSolveHandle);
-            tetI1.Dispose(postSolveHandle);
-            tetI2.Dispose(postSolveHandle);
-            tetI3.Dispose(postSolveHandle);
-            restVolumes.Dispose(postSolveHandle);
+            // 释放临时数组（仅 colliderData，其余都是零拷贝Buffer视图无需释放）
             colliderData.Dispose(postSolveHandle);
 
             state.Dependency = postSolveHandle;

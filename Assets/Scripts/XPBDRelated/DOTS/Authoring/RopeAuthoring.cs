@@ -197,6 +197,7 @@ public class RopeAuthoring : MonoBehaviour
 
             Mesh mesh = new Mesh();
             mesh.name = "Rope_DOTS";
+            mesh.MarkDynamic(); // 每帧更新顶点，标记为Dynamic VBO
             List<Vector3> vertices = new List<Vector3>();
             List<int> triangles = new List<int>();
             List<Vector2> uvs = new List<Vector2>();

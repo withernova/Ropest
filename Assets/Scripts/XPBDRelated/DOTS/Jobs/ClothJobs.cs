@@ -52,9 +52,7 @@ public struct ClothDistanceConstraintJob : IJob
 {
     public NativeArray<float3> Positions;
     [ReadOnly] public NativeArray<float> InvMasses;
-    [ReadOnly] public NativeArray<int> EdgeIndexA;
-    [ReadOnly] public NativeArray<int> EdgeIndexB;
-    [ReadOnly] public NativeArray<float> RestLengths;
+    [ReadOnly] public NativeArray<ClothEdge> Edges;
     public NativeArray<float> Lambdas;
     public float Stiffness;
     public float Dt;
@@ -63,10 +61,12 @@ public struct ClothDistanceConstraintJob : IJob
     {
         float alpha = Stiffness / (Dt * Dt);
 
-        for (int i = 0; i < EdgeIndexA.Length; i++)
+        int edgeCount = Edges.Length;
+        for (int i = 0; i < edgeCount; i++)
         {
-            int id0 = EdgeIndexA[i];
-            int id1 = EdgeIndexB[i];
+            var edge = Edges[i];
+            int id0 = edge.IndexA;
+            int id1 = edge.IndexB;
 
             float w0 = InvMasses[id0];
             float w1 = InvMasses[id1];
@@ -77,7 +77,7 @@ public struct ClothDistanceConstraintJob : IJob
             if (l == 0f) continue;
 
             float3 gradC = diff / l;
-            float l_rest = RestLengths[i];
+            float l_rest = edge.RestLength;
             float C = l - l_rest;
             float wTot = (w1 + w0) * math.lengthsq(gradC);
 

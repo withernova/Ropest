@@ -561,16 +561,18 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 970839131}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1d60dc7a293c24b4fb84828bb2c7cf4b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   gravity: {x: 0, y: -9.8, z: 0}
+  shape: 1
   sizeX: 1
   sizeY: 1
   sizeZ: 1
   resolution: 12
+  projectToSphereSurface: 1
   meshOrigin: {x: 0, y: 0, z: 0}
   softBodyMaterial: {fileID: 2100000, guid: a6a9daffd97df7545b640ad5f896c383, type: 2}
   numSubSteps: 12
@@ -589,7 +591,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 970839131}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4f3e03b894cda1746a6334c2f7917a31, type: 3}
   m_Name: 
@@ -603,10 +605,12 @@ MonoBehaviour:
   ropeMaterial: {fileID: 2100000, guid: 2a8f9a878cb7cff45b00339938d945ce, type: 2}
   numSubSteps: 6
   edgeStiffness: 0.0001
+  bendTwistStiffness: 0.6
   bendTwistKs: 0.8
   ghostDistance: 0.1
   gravityFactor: 1
   damping: 0.01
+  friction: 0.3
 --- !u!1 &1306927582
 GameObject:
   m_ObjectHideFlags: 0
