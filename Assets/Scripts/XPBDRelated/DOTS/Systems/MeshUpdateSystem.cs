@@ -1,9 +1,48 @@
+using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Rendering;
+
+// ============================================================
+// 写回 Mesh 顶点前的 world→local 变换工具 Job
+// Spawner 在创建粒子时，直接把 Mesh 顶点（Mesh 局部坐标）塞进 ParticlePosition 作为
+// 初始 world 位置，所有仿真都用 world 空间（重力/碰撞体/粒子）。
+// 而 MeshFilter 挂在 Spawner 的 GameObject 上，Unity 渲染 Mesh 时会再乘一次
+// localToWorldMatrix。如果该 GameObject 的 transform.position/rotation/scale 不是 identity，
+// 那视觉布料就会被"再平移/旋转/缩放一次"，产生与碰撞体的视觉错位。
+// 解决：写回 Mesh 顶点之前，把粒子 world 位置乘以 worldToLocalMatrix。
+// ============================================================
+[BurstCompile]
+public struct ApplyWorldToLocalPositionsJob : IJobParallelFor
+{
+    public NativeArray<float3> Positions;   // 原地变换：world → local
+    public float4x4 WorldToLocal;
+
+    public void Execute(int i)
+    {
+        Positions[i] = math.transform(WorldToLocal, Positions[i]);
+    }
+}
+
+[BurstCompile]
+public struct ApplyWorldToLocalNormalsJob : IJobParallelFor
+{
+    public NativeArray<float3> Normals;
+    // 对 Normal 的正确变换应为 (worldToLocal 的 3x3 部分的逆转置)，
+    // 在无非均匀缩放时等价于 worldToLocal 的 3x3 本身。
+    // 这里直接用 3x3 + 归一化，满足大多数情况（均匀缩放）。
+    public float3x3 WorldToLocal3x3;
+
+    public void Execute(int i)
+    {
+        float3 n = math.mul(WorldToLocal3x3, Normals[i]);
+        float len = math.length(n);
+        Normals[i] = len > 1e-8f ? n / len : Normals[i];
+    }
+}
 
 /// <summary>
 /// Rope Mesh更新系统 - 在Presentation阶段运行
@@ -35,6 +74,12 @@ public partial class RopeMeshUpdateSystem : SystemBase
 
     protected override void OnUpdate()
     {
+        // 关键：主线程同步访问 ParticlePosition/GhostPosition 等 Buffer 前，
+        // 必须完成上游模拟系统在这些 ComponentType 上调度的未完成 Job。
+        // 用 _ropeQuery.CompleteDependency() 精准等待 Query 声明的 ComponentType 的 fence，
+        // 不会像 CompleteAllTrackedJobs 那样 ClearDependencies 而破坏其他系统的依赖链。
+        _ropeQuery.CompleteDependency();
+
         var entities = _ropeQuery.ToEntityArray(Allocator.Temp);
 
         for (int e = 0; e < entities.Length; e++)
@@ -78,6 +123,18 @@ public partial class RopeMeshUpdateSystem : SystemBase
                 NumPoints = numPoints
             };
             renderJob.Schedule(default(JobHandle)).Complete();
+
+            // 粒子位置是 world 空间，写回 Mesh 前必须转换到 MeshFilter.transform 的 local 空间，
+            // 否则当 GameObject 非 identity 时视觉位置与仿真/碰撞位置错位。
+            if (meshRef.MeshFilter != null)
+            {
+                var worldToLocal = (float4x4)meshRef.MeshFilter.transform.worldToLocalMatrix;
+                new ApplyWorldToLocalPositionsJob
+                {
+                    Positions = _outputVerts,
+                    WorldToLocal = worldToLocal
+                }.Schedule(numOutputVerts, 64).Complete();
+            }
 
             // 使用 NativeArray 版 SetVertices 直接把 float3 作为 Vector3 传入，零托管分配
             var vertsAsVec3 = _outputVerts.Reinterpret<Vector3>();
@@ -134,6 +191,11 @@ public partial class ClothMeshUpdateSystem : SystemBase
 
     protected override void OnUpdate()
     {
+        // 关键：主线程同步访问 ParticlePosition 等 Buffer 前，
+        // 必须完成上游模拟系统在这些 ComponentType 上调度的未完成 Job。
+        // 用 _clothQuery.CompleteDependency() 精准等待相关 fence，无副作用。
+        _clothQuery.CompleteDependency();
+
         var entities = _clothQuery.ToEntityArray(Allocator.Temp);
 
         for (int e = 0; e < entities.Length; e++)
@@ -196,6 +258,24 @@ public partial class ClothMeshUpdateSystem : SystemBase
                 };
                 interpJob.Schedule(numRenderVerts, 64, normalHandle).Complete();
 
+                // 粒子位置/法线都在 world 空间，需转到 MeshFilter local 空间写回 Mesh。
+                if (meshRef.MeshFilter != null)
+                {
+                    var worldToLocal = (float4x4)meshRef.MeshFilter.transform.worldToLocalMatrix;
+                    var w2l3x3 = new float3x3(worldToLocal);
+                    var posHandle = new ApplyWorldToLocalPositionsJob
+                    {
+                        Positions = _renderPositions,
+                        WorldToLocal = worldToLocal
+                    }.Schedule(numRenderVerts, 64);
+                    var nrmHandle = new ApplyWorldToLocalNormalsJob
+                    {
+                        Normals = _renderNormals,
+                        WorldToLocal3x3 = w2l3x3
+                    }.Schedule(numRenderVerts, 64);
+                    JobHandle.CombineDependencies(posHandle, nrmHandle).Complete();
+                }
+
                 // 回写：使用 NativeArray 版本的 SetVertices/SetNormals，避免托管数组分配和拷贝
                 var renderPosVec = _renderPositions.Reinterpret<Vector3>();
                 var renderNormVec = _renderNormals.Reinterpret<Vector3>();
@@ -206,9 +286,25 @@ public partial class ClothMeshUpdateSystem : SystemBase
             else
             {
                 int numParticles = cfg.NumParticles;
-                // 直接用粒子位置作为顶点，零拷贝 Reinterpret 传入
-                var posVec = posArr.Reinterpret<Vector3>();
-                meshRef.Mesh.SetVertices(posVec);
+                // 粒子是 world 空间，写回 Mesh 前转到 MeshFilter local 空间。
+                // 注意：直接模式下 posArr 指向 DynamicBuffer 的内存，不能原地改！
+                // 这里需要一份临时副本。
+                EnsureCapacity(ref _renderPositions, numParticles);
+                NativeArray<float3>.Copy(posArr, 0, _renderPositions, 0, numParticles);
+
+                if (meshRef.MeshFilter != null)
+                {
+                    var worldToLocal = (float4x4)meshRef.MeshFilter.transform.worldToLocalMatrix;
+                    new ApplyWorldToLocalPositionsJob
+                    {
+                        Positions = _renderPositions,
+                        WorldToLocal = worldToLocal
+                    }.Schedule(numParticles, 64).Complete();
+                }
+
+                var posVec = _renderPositions.Reinterpret<Vector3>();
+                // SetVertices 第 3 个参数 length 用 numParticles，确保 _renderPositions 容量更大时不越界
+                meshRef.Mesh.SetVertices(posVec, 0, numParticles);
                 meshRef.Mesh.RecalculateNormals();
                 meshRef.Mesh.RecalculateBounds();
             }
@@ -262,6 +358,11 @@ public partial class SoftBodyMeshUpdateSystem : SystemBase
 
     protected override void OnUpdate()
     {
+        // 关键：主线程同步访问 ParticlePosition 等 Buffer 前，
+        // 必须完成上游模拟系统在这些 ComponentType 上调度的未完成 Job。
+        // 用 _softBodyQuery.CompleteDependency() 精准等待相关 fence，无副作用。
+        _softBodyQuery.CompleteDependency();
+
         var entities = _softBodyQuery.ToEntityArray(Allocator.Temp);
 
         for (int e = 0; e < entities.Length; e++)
@@ -324,6 +425,24 @@ public partial class SoftBodyMeshUpdateSystem : SystemBase
                 };
                 interpJob.Schedule(numRenderVerts, 64, normalHandle).Complete();
 
+                // world → local 变换
+                if (meshRef.MeshFilter != null)
+                {
+                    var worldToLocal = (float4x4)meshRef.MeshFilter.transform.worldToLocalMatrix;
+                    var w2l3x3 = new float3x3(worldToLocal);
+                    var posHandle = new ApplyWorldToLocalPositionsJob
+                    {
+                        Positions = _renderPositions,
+                        WorldToLocal = worldToLocal
+                    }.Schedule(numRenderVerts, 64);
+                    var nrmHandle = new ApplyWorldToLocalNormalsJob
+                    {
+                        Normals = _renderNormals,
+                        WorldToLocal3x3 = w2l3x3
+                    }.Schedule(numRenderVerts, 64);
+                    JobHandle.CombineDependencies(posHandle, nrmHandle).Complete();
+                }
+
                 // 回写：使用 NativeArray 版本的 SetVertices/SetNormals，避免托管数组分配和拷贝
                 var renderPosVec = _renderPositions.Reinterpret<Vector3>();
                 var renderNormVec = _renderNormals.Reinterpret<Vector3>();
@@ -334,9 +453,21 @@ public partial class SoftBodyMeshUpdateSystem : SystemBase
             else
             {
                 int numParticles = cfg.NumParticles;
-                // 直接用粒子位置作为顶点，零拷贝 Reinterpret 传入
-                var posVec = posArr.Reinterpret<Vector3>();
-                meshRef.Mesh.SetVertices(posVec);
+                EnsureCapacity(ref _renderPositions, numParticles);
+                NativeArray<float3>.Copy(posArr, 0, _renderPositions, 0, numParticles);
+
+                if (meshRef.MeshFilter != null)
+                {
+                    var worldToLocal = (float4x4)meshRef.MeshFilter.transform.worldToLocalMatrix;
+                    new ApplyWorldToLocalPositionsJob
+                    {
+                        Positions = _renderPositions,
+                        WorldToLocal = worldToLocal
+                    }.Schedule(numParticles, 64).Complete();
+                }
+
+                var posVec = _renderPositions.Reinterpret<Vector3>();
+                meshRef.Mesh.SetVertices(posVec, 0, numParticles);
                 meshRef.Mesh.RecalculateNormals();
                 meshRef.Mesh.RecalculateBounds();
             }

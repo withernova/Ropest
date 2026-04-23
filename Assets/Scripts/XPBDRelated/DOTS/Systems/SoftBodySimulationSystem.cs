@@ -38,10 +38,26 @@ public partial struct SoftBodySimulationSystem : ISystem
         float dt = SystemAPI.Time.DeltaTime;
         if (dt <= 0f) return;
 
+        // 关键：在主线程上用 EntityManager.GetBuffer 访问 ParticlePosition 等组件之前，
+        // 必须完成所有相关 ComponentType 上的未决读写 Job。
+        // 不用 EntityManager.CompleteAllTrackedJobs()：它会 ClearDependencies()，
+        // 破坏 ECS 的 fence 追踪，会波及其他系统（例如 AnalyticalCollider 相关 Job 链）。
+        // 用 _softBodyQuery.CompleteDependency() 只等 Query 声明的 ComponentType 的 fence，精准无副作用。
+        _softBodyQuery.CompleteDependency();
+
         var entities = _softBodyQuery.ToEntityArray(Allocator.Temp);
+
+        // 累积每个 softbody 实体 Job 链的依赖，最后统一写回 state.Dependency，
+        // 避免循环中直接赋值覆盖前一个实体的依赖。
+        JobHandle combinedDependency = state.Dependency;
 
         for (int e = 0; e < entities.Length; e++)
         {
+            // 关键：在用 EntityManager.GetBuffer 同步访问 ParticlePosition 之前，
+            // 必须把上一轮循环里针对该 ComponentType 调度的 Job 全部完成。
+            // ECS 的 AtomicSafety 按 ComponentType 做全局检查，不区分 entity。
+            combinedDependency.Complete();
+
             var entity = entities[e];
             var cfg = state.EntityManager.GetComponentData<SoftBodySolverConfig>(entity);
             int numParticles = cfg.NumParticles;
@@ -77,10 +93,11 @@ public partial struct SoftBodySimulationSystem : ISystem
 
             // === 1. 重置Lambda ===
             var resetDistJob = new SoftBodyResetDistanceLambdaJob { Lambdas = distLambdaArr };
-            var resetDistHandle = resetDistJob.Schedule(edgeCount, 64, state.Dependency);
+            // 注意：依赖必须接在 combinedDependency 之后，避免多个 SoftBody 实体并行写相同 ComponentType。
+            var resetDistHandle = resetDistJob.Schedule(edgeCount, 64, combinedDependency);
 
             var resetVolJob = new SoftBodyResetVolumeLambdaJob { Lambdas = volLambdaArr };
-            var resetVolHandle = resetVolJob.Schedule(tetCount, 64, state.Dependency);
+            var resetVolHandle = resetVolJob.Schedule(tetCount, 64, combinedDependency);
 
             var resetHandle = JobHandle.CombineDependencies(resetDistHandle, resetVolHandle);
 
@@ -160,8 +177,10 @@ public partial struct SoftBodySimulationSystem : ISystem
             // 释放临时数组（仅 colliderData，其余都是零拷贝Buffer视图无需释放）
             colliderData.Dispose(postSolveHandle);
 
-            state.Dependency = postSolveHandle;
+            combinedDependency = JobHandle.CombineDependencies(combinedDependency, postSolveHandle);
         }
+
+        state.Dependency = combinedDependency;
 
         entities.Dispose();
     }

@@ -36,46 +36,61 @@ public class AnalyticalColliderSource : MonoBehaviour
     }
 
     /// <summary>
-    /// 自动检测Unity Collider并读取参数
+    /// 自动检测Unity Collider并读取参数（仅用作 Inspector 缓存 / autoDetect=false 时的 fallback）
+    /// 运行时真实参数由 GetColliderData() 每帧重新计算
     /// </summary>
     void DetectCollider()
     {
+        Vector3 lossy = transform.lossyScale;
         if (TryGetComponent<SphereCollider>(out var sphere))
         {
             colliderType = AnalyticalColliderType.Sphere;
-            // 考虑缩放
-            float maxScale = Mathf.Max(transform.lossyScale.x,
-                Mathf.Max(transform.lossyScale.y, transform.lossyScale.z));
+            float maxScale = Mathf.Max(Mathf.Abs(lossy.x),
+                Mathf.Max(Mathf.Abs(lossy.y), Mathf.Abs(lossy.z)));
             sphereRadius = sphere.radius * maxScale;
         }
         else if (TryGetComponent<BoxCollider>(out var box))
         {
             colliderType = AnalyticalColliderType.Box;
-            Vector3 scale = transform.lossyScale;
-            boxHalfExtents = Vector3.Scale(box.size * 0.5f, scale);
+            boxHalfExtents = new Vector3(
+                box.size.x * 0.5f * Mathf.Abs(lossy.x),
+                box.size.y * 0.5f * Mathf.Abs(lossy.y),
+                box.size.z * 0.5f * Mathf.Abs(lossy.z)
+            );
         }
     }
 
     /// <summary>
     /// 获取当前帧的碰撞体数据
+    /// 注意：必须把 Unity Collider 的 center（相对 transform 的局部偏移）
+    /// 加到 world Center 上，否则当 collider.center != (0,0,0) 时，
+    /// 解析碰撞的位置会和视觉 Mesh 错位（粒子会撞在一个看不见的偏移位置）。
     /// </summary>
     public AnalyticalColliderData GetColliderData()
     {
+        Vector3 lossy = transform.lossyScale;
+        Quaternion rot = transform.rotation;
+
         var data = new AnalyticalColliderData
         {
             Type = colliderType,
+            // Center 先用 transform.position 打底，下面根据具体 Collider 的 center 再加偏移
             Center = transform.position,
-            Rotation = transform.rotation,
-            InvRotation = math.inverse(transform.rotation)
+            Rotation = rot,
+            InvRotation = math.inverse(rot)
         };
 
         if (colliderType == AnalyticalColliderType.Sphere)
         {
-            // 运行时也考虑缩放变化
             if (autoDetect && TryGetComponent<SphereCollider>(out var sphere))
             {
-                float maxScale = Mathf.Max(transform.lossyScale.x,
-                    Mathf.Max(transform.lossyScale.y, transform.lossyScale.z));
+                // 把 SphereCollider.center（local space）变换到 world space 并叠加
+                Vector3 localCenter = Vector3.Scale(sphere.center, lossy);
+                data.Center = (float3)(transform.position + rot * localCenter);
+
+                // Unity SphereCollider 真实半径 = radius * max(|x|,|y|,|z|) lossyScale
+                float maxScale = Mathf.Max(Mathf.Abs(lossy.x),
+                    Mathf.Max(Mathf.Abs(lossy.y), Mathf.Abs(lossy.z)));
                 data.Radius = sphere.radius * maxScale;
             }
             else
@@ -87,8 +102,16 @@ public class AnalyticalColliderSource : MonoBehaviour
         {
             if (autoDetect && TryGetComponent<BoxCollider>(out var box))
             {
-                Vector3 scale = transform.lossyScale;
-                data.HalfExtents = Vector3.Scale(box.size * 0.5f, scale);
+                // 把 BoxCollider.center（local space）变换到 world space 并叠加
+                Vector3 localCenter = Vector3.Scale(box.center, lossy);
+                data.Center = (float3)(transform.position + rot * localCenter);
+
+                // Unity BoxCollider 真实半尺寸 = size * 0.5 * |lossyScale|（逐分量）
+                data.HalfExtents = new float3(
+                    box.size.x * 0.5f * Mathf.Abs(lossy.x),
+                    box.size.y * 0.5f * Mathf.Abs(lossy.y),
+                    box.size.z * 0.5f * Mathf.Abs(lossy.z)
+                );
             }
             else
             {

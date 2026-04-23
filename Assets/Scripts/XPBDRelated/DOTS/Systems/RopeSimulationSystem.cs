@@ -42,14 +42,32 @@ public partial struct RopeSimulationSystem : ISystem
         float dt = SystemAPI.Time.DeltaTime;
         if (dt <= 0f) return;
 
+        // 关键：在主线程上用 EntityManager.GetBuffer 访问 ParticlePosition 等组件之前，
+        // 必须完成所有相关 ComponentType 上的未决读写 Job。
+        // 不用 EntityManager.CompleteAllTrackedJobs()：它会 ClearDependencies()，
+        // 破坏 ECS 的 fence 追踪，会波及其他系统（例如 AnalyticalCollider 相关 Job 链）。
+        // 用 _ropeQuery.CompleteDependency() 只等 Query 声明的 ComponentType 的 fence，精准无副作用。
+        _ropeQuery.CompleteDependency();
+
         // 拉取场景中的解析碰撞体（与 Cloth/SoftBody 相同的数据源）。
         // 每帧拷一份供所有 Rope 共用，PostSolve 后再 Dispose。
         var colliderData = AnalyticalColliderManager.GetColliderDataForJobs(Allocator.TempJob);
 
         var entities = _ropeQuery.ToEntityArray(Allocator.Temp);
 
+        // 累积每个 rope 实体 Job 链的依赖，循环内不能直接覆盖 state.Dependency，
+        // 否则会丢失前一个 rope 的依赖；并且下一个 rope 的 Job 必须串行等待前一个完成，
+        // 因为它们写同一个 ComponentType（ParticlePosition 等）。
+        JobHandle combinedDependency = state.Dependency;
+
         for (int e = 0; e < entities.Length; e++)
         {
+            // 关键：在用 EntityManager.GetBuffer 同步访问 ParticlePosition/GhostPosition 之前，
+            // 必须把上一轮循环里针对这些 ComponentType 调度的 Job 全部完成。
+            // ECS 的 AtomicSafety 按 ComponentType 做全局检查，不区分 entity，
+            // 即便这里读的是不同 entity 的 buffer，只要有未完成的同类型写 Job 就会抛异常。
+            combinedDependency.Complete();
+
             var entity = entities[e];
             var cfg = state.EntityManager.GetComponentData<RopeSolverConfig>(entity);
             int numPoints = cfg.NumPoints;
@@ -89,6 +107,7 @@ public partial struct RopeSimulationSystem : ISystem
             var el1 = edgeLambda1.Reinterpret<float>().AsNativeArray();
             var el2 = edgeLambda2.Reinterpret<float>().AsNativeArray();
             var btLambdas = bendLambdas.Reinterpret<float3>().AsNativeArray();
+            var segmentContactFlags = new NativeArray<byte>(math.max(0, numPoints - 1), Allocator.TempJob);
 
             // === 1. 重置Lambda ===
             var resetEdgeJob = new RopeResetLambdaJob
@@ -97,14 +116,16 @@ public partial struct RopeSimulationSystem : ISystem
                 EdgeLambda1 = el1,
                 EdgeLambda2 = el2
             };
-            var resetEdgeHandle = resetEdgeJob.Schedule(numPoints, 64, state.Dependency);
+            // 注意：依赖必须接在 combinedDependency 之后，而不是 state.Dependency。
+            // 多个 Rope 写同一 ComponentType，ECS 不允许并行写，必须串行。
+            var resetEdgeHandle = resetEdgeJob.Schedule(numPoints, 64, combinedDependency);
 
             int numBend = math.max(0, numPoints - 2);
             var resetBendJob = new RopeResetBendLambdaJob
             {
                 BendLambdas = btLambdas
             };
-            var resetBendHandle = resetBendJob.Schedule(numBend, 64, state.Dependency);
+            var resetBendHandle = resetBendJob.Schedule(numBend, 64, combinedDependency);
 
             var resetHandle = JobHandle.CombineDependencies(resetEdgeHandle, resetBendHandle);
 
@@ -149,7 +170,8 @@ public partial struct RopeSimulationSystem : ISystem
                     Stiffness = cfg.EdgeStiffness,
                     GhostDistance = cfg.GhostDistance,
                     Dt = dt,
-                    NumPoints = numPoints
+                    NumPoints = numPoints,
+                    SegmentContactFlags = segmentContactFlags
                 };
                 constraintHandle = edgeJob.Schedule(constraintHandle);
 
@@ -170,7 +192,8 @@ public partial struct RopeSimulationSystem : ISystem
                         // 约束过于刚性 → factor_matrix 数值病态 → 第2~4帧发散为 NaN/Inf，绳子消失。
                         Stiffness = cfg.BendTwistStiffness,
                         Dt = dt,
-                        NumPoints = numPoints
+                        NumPoints = numPoints,
+                        SegmentContactFlags = segmentContactFlags
                     };
                     constraintHandle = bendJob.Schedule(constraintHandle);
                 }
@@ -186,9 +209,23 @@ public partial struct RopeSimulationSystem : ISystem
                         Colliders = colliderData,
                         ParticleRadius = cfg.Radius,
                         Friction = cfg.Friction,
-                        NumPoints = numPoints
+                        NumPoints = numPoints,
+                        SegmentContactFlags = segmentContactFlags
                     };
                     constraintHandle = collisionJob.Schedule(constraintHandle);
+
+                    if (numGhosts > 0)
+                    {
+                        var ghostCollisionJob = new RopeGhostAnalyticalCollisionJob
+                        {
+                            GhostPos = ghostPosArr,
+                            GhostInvMass = ghostInvMassArr,
+                            Colliders = colliderData,
+                            // Ghost 只做很轻的反穿透，不把它当成真实绳体厚度来碰撞。
+                            GhostCollisionRadius = math.max(0f, math.min(cfg.Radius * 0.2f, cfg.GhostDistance * 0.5f))
+                        };
+                        constraintHandle = ghostCollisionJob.Schedule(numGhosts, 64, constraintHandle);
+                    }
                 }
             }
 
@@ -209,13 +246,18 @@ public partial struct RopeSimulationSystem : ISystem
                 Vel = velArr,
                 GhostVels = ghostVelArr
             };
-            state.Dependency = postSolveGhostVelJob.Schedule(numGhosts, 64, velHandle);
+            var ghostVelHandle = postSolveGhostVelJob.Schedule(numGhosts, 64, velHandle);
+            var disposeHandle = segmentContactFlags.Dispose(ghostVelHandle);
+
+            // 累积到 combinedDependency，供下一轮循环串行 & 最终写回 state.Dependency 使用。
+            combinedDependency = JobHandle.CombineDependencies(combinedDependency, disposeHandle);
         }
+
+        state.Dependency = combinedDependency;
 
         entities.Dispose();
 
-        // colliderData 在所有 Rope 的 Job 完成后再释放；
-        // 由于每次 entity 循环都把依赖链挂到 state.Dependency，这里 Dispose(state.Dependency) 即可安全释放。
+        // colliderData 在所有 Rope 的 Job 完成后再释放。
         colliderData.Dispose(state.Dependency);
     }
 }
