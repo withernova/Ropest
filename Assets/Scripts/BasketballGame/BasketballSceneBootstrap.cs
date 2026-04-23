@@ -85,10 +85,10 @@ namespace BasketballGame
             playerStandGo.transform.position = new Vector3(0, 0, 0);
 
             // ============================================================
-            // 4. 目标区域中心（玩家正前方 10m）
+            // 4. 目标区域中心（玩家正前方 6m，靠近玩家方便投篮）
             // ============================================================
             var targetAreaGo = new GameObject("TargetAreaCenter");
-            targetAreaGo.transform.position = new Vector3(0, 0, 10f);
+            targetAreaGo.transform.position = new Vector3(0, 0, 6f);
 
             // ============================================================
             // 5. GameManager

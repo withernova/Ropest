@@ -27,11 +27,11 @@ namespace BasketballGame
 
         [Header("位置随机")]
         [Tooltip("最小距离玩家")]
-        public float minDistanceFromPlayer = 6f;
+        public float minDistanceFromPlayer = 4f;
         [Tooltip("X方向随机范围（相对 targetAreaCenter 局部）")]
-        public float xSpread = 5f;
+        public float xSpread = 3.5f;
         [Tooltip("Z方向额外偏移范围")]
-        public float zSpread = 3f;
+        public float zSpread = 2f;
 
         private Coroutine _loop;
 

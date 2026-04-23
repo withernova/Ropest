@@ -35,6 +35,14 @@ namespace BasketballGame
         [Tooltip("布面朝玩家方向的仰角（度）。>0 时布面形成\"底边靠近玩家、顶边远离玩家\"的后仰斜盆，开口朝玩家")]
         [Range(0f, 80f)]
         public float tiltAngleTowardsPlayer = 50f;
+        [Tooltip("是否在 Init 时随机倾斜角度（启用时每张布料角度在 [tiltAngleMin, tiltAngleMax] 间随机）")]
+        public bool randomizeTiltAngle = true;
+        [Tooltip("随机倾斜角度下限")]
+        [Range(0f, 80f)]
+        public float tiltAngleMin = 45f;
+        [Tooltip("随机倾斜角度上限")]
+        [Range(0f, 80f)]
+        public float tiltAngleMax = 60f;
         [Tooltip("四角朝玩家方向凸出的距离（米）。让四角往前凸、中心相对下凹，形成真正能兜住球的'兜'")]
         [Range(0f, 3f)]
         public float cornerPushBackAmount = 0f;
@@ -95,6 +103,15 @@ namespace BasketballGame
         public void Init(Vector3 targetCenterWorld, float visualRiseHeight = 6f)
         {
             _targetWorldOrigin = targetCenterWorld;
+
+            // 随机倾斜角度：每张布料开口角度略有不同，让游戏更有变化
+            if (randomizeTiltAngle)
+            {
+                float lo = Mathf.Min(tiltAngleMin, tiltAngleMax);
+                float hi = Mathf.Max(tiltAngleMin, tiltAngleMax);
+                tiltAngleTowardsPlayer = UnityEngine.Random.Range(lo, hi);
+            }
+
             // 视觉起点：只是"Rising 阶段展示时的位置偏移起点"，粒子不会真的生成到这里，
             //           所以即使放到地下也不会引发地面碰撞问题。
             _startWorldOrigin = targetCenterWorld + Vector3.down * visualRiseHeight;

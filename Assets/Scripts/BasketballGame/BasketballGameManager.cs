@@ -49,7 +49,7 @@ namespace BasketballGame
         [Tooltip("得分需要在布料内停留的时间（秒）")]
         public float requiredStayDuration = 3.5f;
         [Tooltip("判定球进入布料区域的球心半径（以布料中心为准）")]
-        public float scoreTriggerRadius = 1.2f;
+        public float scoreTriggerRadius = 2.0f;
 
         // -----------------------------
         // 数量上限
