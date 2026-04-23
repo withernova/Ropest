@@ -28,10 +28,19 @@ public partial struct CrossBodyCollisionSystem : ISystem
     private EntityQuery _clothQuery;
     private EntityQuery _softBodyQuery;
 
-    // 迭代次数：越高越稳定但越慢；2 次是性能和稳定性的良好平衡
-    private const int NumIterations = 2;
+    // 迭代次数：越高越稳定但越慢；布料-球场景下 4 次能把大穿透平滑摊开，显著减少抽搐
+    private const int NumIterations = 4;
     // 跨体摩擦：用于耗散切向速度，防止粒子在对方表面无限滑动
     private const float CrossBodyFriction = 0.2f;
+
+    // 单次迭代单个粒子最大修正幅度 = 该比例 × (rI+rJ)
+    // 0.6 表示一次最多把穿透推开 60% 的"碰撞直径"，剩余穿透下一次迭代继续解
+    // 这样可以避免单帧跳跃，从而避免"突出/抽搐"
+    private const float MaxCorrectionRatio = 0.6f;
+
+    // 速度松弛：把跨体修正带来的速度变化再乘一个 <1 的系数，避免"大修正 → 大速度 → 下一帧冲更远 → 抖"
+    // 0.5 意味着只有一半的位置修正会转成速度，剩余能量被耗散掉（相当于隐式塑性/吸能）
+    private const float VelocityRelaxation = 0.5f;
 
     // 诊断：每 N 帧打一次日志，观察跨体碰撞是否真的在工作、修正幅度多大
     // 改成 0 可关闭日志
@@ -62,14 +71,28 @@ public partial struct CrossBodyCollisionSystem : ISystem
         float dt = SystemAPI.Time.DeltaTime;
         if (dt <= 0f) return;
 
-        var clothEntities = _clothQuery.ToEntityArray(Allocator.Temp);
+        var allClothEntities = _clothQuery.ToEntityArray(Allocator.Temp);
         var softBodyEntities = _softBodyQuery.ToEntityArray(Allocator.Temp);
+
+        // 过滤掉 SkipCrossBodyCollision=true 的布料（例如升起/落下阶段的布料）
+        // 这些布料本帧不参与跨体碰撞，避免正在被"锚点驱动"的布料和球之间产生怪异相互作用
+        var clothEntitiesList = new NativeList<Entity>(allClothEntities.Length, Allocator.Temp);
+        for (int i = 0; i < allClothEntities.Length; i++)
+        {
+            var cfg = state.EntityManager.GetComponentData<ClothSolverConfig>(allClothEntities[i]);
+            if (!cfg.SkipCrossBodyCollision)
+            {
+                clothEntitiesList.Add(allClothEntities[i]);
+            }
+        }
+        allClothEntities.Dispose();
+        var clothEntities = clothEntitiesList.AsArray();
 
         int totalBodies = clothEntities.Length + softBodyEntities.Length;
 
         if (totalBodies < 2)
         {
-            clothEntities.Dispose();
+            clothEntitiesList.Dispose();
             softBodyEntities.Dispose();
             return;
         }
@@ -116,7 +139,7 @@ public partial struct CrossBodyCollisionSystem : ISystem
 
         if (totalParticles <= 0 || maxRadius <= 0f)
         {
-            clothEntities.Dispose();
+            clothEntitiesList.Dispose();
             softBodyEntities.Dispose();
             offsets.Dispose();
             sizes.Dispose();
@@ -175,18 +198,24 @@ public partial struct CrossBodyCollisionSystem : ISystem
         float cellSize = math.max(maxRadius * 2f, 0.01f);
         var hashMap = new NativeParallelMultiHashMap<int, int>(totalParticles * 2, Allocator.TempJob);
 
-        // === 2. 迭代：BuildHash → Resolve → Apply ===
+        // === 2. 迭代：BuildHash → Resolve → Apply（全部并行）===
+        // 并行块大小经验值：粒子数较少时用 32，能保持一定的局部性同时吃满多核
+        const int kBatchSize = 32;
         JobHandle iterHandle = default;
         for (int iter = 0; iter < NumIterations; iter++)
         {
+            // BuildHashJob 的 ParallelWriter 不支持 Clear，必须主线程先清空
+            // 这里要等待上一轮的 iterHandle 完成后再 Clear（保证安全）
+            iterHandle.Complete();
+            hashMap.Clear();
+
             var buildHashJob = new BuildCrossBodyHashJob
             {
                 GlobalPositions = globalPositions,
-                HashMap = hashMap,
-                CellSize = cellSize,
-                NumParticles = totalParticles
+                HashMap = hashMap.AsParallelWriter(),
+                CellSize = cellSize
             };
-            iterHandle = buildHashJob.Schedule(iterHandle);
+            iterHandle = buildHashJob.Schedule(totalParticles, kBatchSize);
 
             var resolveJob = new CrossBodyCollisionResolveJob
             {
@@ -197,17 +226,16 @@ public partial struct CrossBodyCollisionSystem : ISystem
                 HashMap = hashMap,
                 GlobalCorrections = globalCorrections,
                 CellSize = cellSize,
-                NumParticles = totalParticles
+                MaxCorrectionRatio = MaxCorrectionRatio
             };
-            iterHandle = resolveJob.Schedule(iterHandle);
+            iterHandle = resolveJob.Schedule(totalParticles, kBatchSize, iterHandle);
 
             var applyJob = new ApplyGlobalCorrectionJob
             {
                 GlobalPositions = globalPositions,
-                GlobalCorrections = globalCorrections,
-                NumParticles = totalParticles
+                GlobalCorrections = globalCorrections
             };
-            iterHandle = applyJob.Schedule(iterHandle);
+            iterHandle = applyJob.Schedule(totalParticles, kBatchSize, iterHandle);
         }
 
         iterHandle.Complete();
@@ -228,7 +256,7 @@ public partial struct CrossBodyCollisionSystem : ISystem
             int off = offsets[i];
             float friction = frictions[i];
             ScatterBackToBuffer(posBuf, prevBuf, velBuf, globalPositions, originalPositions, globalInvMasses,
-                off, num, friction, dt, doDebug, ref clothContacts, ref clothMaxCorr);
+                off, num, friction, dt, VelocityRelaxation, doDebug, ref clothContacts, ref clothMaxCorr);
         }
         for (int i = 0; i < numSoft; i++)
         {
@@ -241,7 +269,7 @@ public partial struct CrossBodyCollisionSystem : ISystem
             int off = offsets[idx];
             float friction = frictions[idx];
             ScatterBackToBuffer(posBuf, prevBuf, velBuf, globalPositions, originalPositions, globalInvMasses,
-                off, num, friction, dt, doDebug, ref softContacts, ref softMaxCorr);
+                off, num, friction, dt, VelocityRelaxation, doDebug, ref softContacts, ref softMaxCorr);
         }
 
         if (doDebug)
@@ -260,7 +288,7 @@ public partial struct CrossBodyCollisionSystem : ISystem
         globalCorrections.Dispose();
         hashMap.Dispose();
 
-        clothEntities.Dispose();
+        clothEntitiesList.Dispose();
         softBodyEntities.Dispose();
         offsets.Dispose();
         sizes.Dispose();
@@ -270,6 +298,7 @@ public partial struct CrossBodyCollisionSystem : ISystem
 
     /// <summary>
     /// 主线程：把净修正写回实体 Buffer，并同步更新速度（关键：让碰撞效果立即可见，而非延迟一帧）
+    /// velocityRelaxation：把修正导致的速度变化乘以此系数（<1），避免"大修正 → 大速度 → 下帧冲更深 → 再弹开"的抖动循环。
     /// </summary>
     private static void ScatterBackToBuffer(
         DynamicBuffer<ParticlePosition> posBuf,
@@ -278,7 +307,7 @@ public partial struct CrossBodyCollisionSystem : ISystem
         NativeArray<float3> globalPositions,
         NativeArray<float3> originalPositions,
         NativeArray<float> globalInvMasses,
-        int offset, int num, float friction, float dt,
+        int offset, int num, float friction, float dt, float velocityRelaxation,
         bool countStats, ref int contactCount, ref float maxCorrLen)
     {
         float invDt = 1f / dt;
@@ -298,7 +327,8 @@ public partial struct CrossBodyCollisionSystem : ISystem
             }
 
             // 应用位置修正
-            float3 newPos = posBuf[k].Value + corr;
+            float3 oldPos = posBuf[k].Value;
+            float3 newPos = oldPos + corr;
             posBuf[k] = new ParticlePosition { Value = newPos };
 
             // 摩擦：沿切向把 prev 朝 pos 拉近
@@ -322,29 +352,15 @@ public partial struct CrossBodyCollisionSystem : ISystem
                 prevBuf[k] = new ParticlePrevPosition { Value = prev };
             }
 
-            // 关键：同步更新速度为"新位置 - prev"/ dt
-            // 这样下一帧 PreSolve 会基于修正后的速度积分，修正效果立即可见
-            velBuf[k] = new ParticleVelocity { Value = (newPos - prev) * invDt };
-        }
-    }
-}
-
-/// <summary>
-/// 把本次迭代累积的 Corrections 应用到 GlobalPositions，然后清零 Corrections
-/// </summary>
-[Unity.Burst.BurstCompile]
-public struct ApplyGlobalCorrectionJob : Unity.Jobs.IJob
-{
-    public NativeArray<float3> GlobalPositions;
-    public NativeArray<float3> GlobalCorrections;
-    public int NumParticles;
-
-    public void Execute()
-    {
-        for (int i = 0; i < NumParticles; i++)
-        {
-            GlobalPositions[i] += GlobalCorrections[i];
-            GlobalCorrections[i] = float3.zero;
+            // 同步更新速度：但只把 velocityRelaxation 比例的修正转成速度变化，
+            // 其余部分被"吸能"掉，避免震荡。
+            // 公式：newVel = oldVel + (corr * velocityRelaxation) / dt
+            //      等价于 (newPos - prev) * invDt 再减去 (1-relax) * corr * invDt
+            float3 baseVel = (newPos - prev) * invDt;
+            float3 velFromCorr = corr * invDt;
+            // 从 baseVel 中减去 (1 - relax) * velFromCorr，让修正引入的速度被衰减
+            float3 finalVel = baseVel - (1f - velocityRelaxation) * velFromCorr;
+            velBuf[k] = new ParticleVelocity { Value = finalVel };
         }
     }
 }

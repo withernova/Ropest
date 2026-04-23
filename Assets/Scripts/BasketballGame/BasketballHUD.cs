@@ -1,0 +1,206 @@
+using UnityEngine;
+using UnityEngine.UI;
+
+namespace BasketballGame
+{
+    /// <summary>
+    /// 屏幕 HUD：
+    /// 1. 蓄力条（底部中央）：显示当前 Shooter.CurrentPower
+    /// 2. 分数（右上角）
+    /// 3. 瞄准准心（屏幕中央）
+    /// 4. 最近一张布料的停留进度条（屏幕上方中央）
+    ///
+    /// 纯代码方式自动构建 UI（不依赖预设），挂到任意 GameObject 上即可使用。
+    /// </summary>
+    public class BasketballHUD : MonoBehaviour
+    {
+        [Header("引用")]
+        public BasketballShooter shooter;
+
+        // UI 元素（运行时创建）
+        private Canvas _canvas;
+        private Slider _powerBar;
+        private Image _powerFill;
+        private Text _scoreText;
+        private Image _crosshair;
+        private Slider _stayBar;
+        private Text _stateText;
+
+        void Start()
+        {
+            BuildUI();
+            var gm = BasketballGameManager.Instance;
+            if (gm != null)
+            {
+                gm.OnScoreChanged += OnScoreChanged;
+                OnScoreChanged(gm.Score);
+            }
+        }
+
+        void OnDestroy()
+        {
+            var gm = BasketballGameManager.Instance;
+            if (gm != null) gm.OnScoreChanged -= OnScoreChanged;
+        }
+
+        void Update()
+        {
+            // 蓄力条
+            if (_powerBar != null && shooter != null)
+            {
+                _powerBar.value = shooter.CurrentPower;
+                // 颜色：低=绿，中=黄，高=红
+                if (_powerFill != null)
+                {
+                    _powerFill.color = Color.Lerp(Color.green, Color.red, shooter.CurrentPower);
+                }
+                _powerBar.gameObject.SetActive(shooter.IsCharging);
+            }
+
+            // 取最"危险"的那张布（停留时间最高的）显示进度
+            var gm = BasketballGameManager.Instance;
+            if (gm != null && _stayBar != null)
+            {
+                float maxStay = 0f;
+                foreach (var c in gm.GetActiveCloths())
+                {
+                    if (c == null) continue;
+                    if (c.StayProgress01 > maxStay) maxStay = c.StayProgress01;
+                }
+                _stayBar.value = maxStay;
+                _stayBar.gameObject.SetActive(maxStay > 0.01f);
+            }
+        }
+
+        private void OnScoreChanged(int s)
+        {
+            if (_scoreText != null) _scoreText.text = $"Score: {s}";
+        }
+
+        // =========================================================
+        // UI 构建（纯代码）
+        // =========================================================
+        private void BuildUI()
+        {
+            // Canvas
+            var canvasGo = new GameObject("BasketballHUDCanvas");
+            canvasGo.transform.SetParent(transform, false);
+            _canvas = canvasGo.AddComponent<Canvas>();
+            _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvasGo.AddComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            canvasGo.GetComponent<CanvasScaler>().referenceResolution = new Vector2(1920, 1080);
+            canvasGo.AddComponent<GraphicRaycaster>();
+
+            // 分数
+            _scoreText = CreateText(canvasGo.transform, "Score: 0",
+                new Vector2(1, 1), new Vector2(1, 1), new Vector2(-160, -40),
+                36, TextAnchor.UpperRight);
+
+            // 准心
+            var crossGo = new GameObject("Crosshair");
+            crossGo.transform.SetParent(canvasGo.transform, false);
+            _crosshair = crossGo.AddComponent<Image>();
+            _crosshair.color = new Color(1f, 1f, 1f, 0.85f);
+            var crt = _crosshair.rectTransform;
+            crt.anchorMin = crt.anchorMax = new Vector2(0.5f, 0.5f);
+            crt.sizeDelta = new Vector2(8, 8);
+            crt.anchoredPosition = Vector2.zero;
+
+            // 蓄力条（底部中央，水平）
+            _powerBar = CreateSlider(canvasGo.transform, "PowerBar",
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0, 80),
+                new Vector2(520, 28),
+                out _powerFill);
+            _powerBar.gameObject.SetActive(false);
+
+            // 停留进度条（屏幕上方中央）
+            _stayBar = CreateSlider(canvasGo.transform, "StayBar",
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0, -80),
+                new Vector2(420, 18),
+                out var stayFill);
+            if (stayFill != null) stayFill.color = new Color(0.2f, 0.9f, 0.5f, 0.9f);
+            _stayBar.gameObject.SetActive(false);
+
+            // 状态提示
+            _stateText = CreateText(canvasGo.transform, "按住鼠标左键蓄力，松开投出",
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0, 130),
+                22, TextAnchor.LowerCenter);
+        }
+
+        private Text CreateText(Transform parent, string content,
+            Vector2 anchorMin, Vector2 anchorMax, Vector2 anchoredPos,
+            int fontSize, TextAnchor alignment)
+        {
+            var go = new GameObject("Text");
+            go.transform.SetParent(parent, false);
+            var t = go.AddComponent<Text>();
+            t.text = content;
+            t.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            t.fontSize = fontSize;
+            t.alignment = alignment;
+            t.color = Color.white;
+            t.raycastTarget = false;
+            var rt = t.rectTransform;
+            rt.anchorMin = anchorMin;
+            rt.anchorMax = anchorMax;
+            rt.anchoredPosition = anchoredPos;
+            rt.sizeDelta = new Vector2(360, 60);
+            // 阴影
+            var sh = go.AddComponent<Shadow>();
+            sh.effectColor = new Color(0, 0, 0, 0.8f);
+            sh.effectDistance = new Vector2(2, -2);
+            return t;
+        }
+
+        private Slider CreateSlider(Transform parent, string name,
+            Vector2 anchorMin, Vector2 anchorMax, Vector2 anchoredPos, Vector2 size,
+            out Image fillImage)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            var rt = go.AddComponent<RectTransform>();
+            rt.anchorMin = anchorMin;
+            rt.anchorMax = anchorMax;
+            rt.sizeDelta = size;
+            rt.anchoredPosition = anchoredPos;
+
+            var slider = go.AddComponent<Slider>();
+            slider.minValue = 0f;
+            slider.maxValue = 1f;
+            slider.direction = Slider.Direction.LeftToRight;
+            slider.transition = Selectable.Transition.None;
+            slider.interactable = false;
+
+            // Background
+            var bgGo = new GameObject("Background");
+            bgGo.transform.SetParent(go.transform, false);
+            var bg = bgGo.AddComponent<Image>();
+            bg.color = new Color(0, 0, 0, 0.55f);
+            var bgRt = bg.rectTransform;
+            bgRt.anchorMin = Vector2.zero; bgRt.anchorMax = Vector2.one;
+            bgRt.offsetMin = Vector2.zero; bgRt.offsetMax = Vector2.zero;
+
+            // Fill Area
+            var fillArea = new GameObject("Fill Area");
+            fillArea.transform.SetParent(go.transform, false);
+            var fillAreaRt = fillArea.AddComponent<RectTransform>();
+            fillAreaRt.anchorMin = new Vector2(0, 0);
+            fillAreaRt.anchorMax = new Vector2(1, 1);
+            fillAreaRt.offsetMin = new Vector2(4, 4);
+            fillAreaRt.offsetMax = new Vector2(-4, -4);
+
+            var fillGo = new GameObject("Fill");
+            fillGo.transform.SetParent(fillArea.transform, false);
+            fillImage = fillGo.AddComponent<Image>();
+            fillImage.color = Color.green;
+            var fillRt = fillImage.rectTransform;
+            fillRt.anchorMin = Vector2.zero; fillRt.anchorMax = new Vector2(1, 1);
+            fillRt.offsetMin = Vector2.zero; fillRt.offsetMax = Vector2.zero;
+
+            slider.fillRect = fillRt;
+            slider.targetGraphic = fillImage;
+            slider.value = 0f;
+            return slider;
+        }
+    }
+}

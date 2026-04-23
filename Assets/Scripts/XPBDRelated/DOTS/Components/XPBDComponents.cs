@@ -227,6 +227,11 @@ public struct ClothSolverConfig : IComponentData
     public float Damping;           // 速度阻尼系数（0~1，越大阻尼越强，推荐0.01~0.05）
     public float CollisionRadius;   // 碰撞检测半径（安全边距）
     public float Friction;          // 碰撞摩擦系数（0~1，推荐0.3~0.6）
+    // 运行时开关：设为 true 时本帧跳过与场景解析碰撞体（地板/Box/球体）的碰撞
+    // 用于"布料升起/落下"等非交互阶段，避免布料穿过地面产生被压扁的怪异网格
+    public bool SkipAnalyticalCollision;
+    // 运行时开关：设为 true 时本帧跳过与其他 Body（软体球等）的跨体碰撞
+    public bool SkipCrossBodyCollision;
 }
 
 /// <summary>

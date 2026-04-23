@@ -157,7 +157,8 @@ public partial struct ClothSimulationSystem : ISystem
                 }
 
                 // 解析碰撞：每个SubStep都做，与约束交替迭代
-                if (colliderData.Length > 0)
+                // 运行时开关：升起/落下阶段置 SkipAnalyticalCollision=true，避免布料穿过地面产生怪异网格
+                if (colliderData.Length > 0 && !cfg.SkipAnalyticalCollision)
                 {
                     var analyticalCollisionJob = new ClothAnalyticalCollisionJob
                     {
