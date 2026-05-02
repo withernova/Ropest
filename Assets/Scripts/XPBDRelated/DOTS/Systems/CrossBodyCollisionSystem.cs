@@ -13,19 +13,16 @@ public partial struct CrossBodyCollisionSystem : ISystem
     private EntityQuery _clothQuery;
     private EntityQuery _softBodyQuery;
 
-    // 迭代次数：越高越稳定但越慢；布料-球场景下 4 次能把大穿透平滑摊开，显著减少抽搐
-    private const int NumIterations = 4;
-    // 跨体摩擦：用于耗散切向速度，防止粒子在对方表面无限滑动
+    // 迭代次数：每次迭代只处理"最深穿透"邻居，多迭代能逐个解开所有接触
+    private const int NumIterations = 8;
+    // 跨体摩擦：切向速度衰减比例
     private const float CrossBodyFriction = 0.2f;
 
-    private const float MaxCorrectionRatio = 0.6f;
+    // 单次迭代最大修正比例：相对于 (rI+rJ)。
+    // 1.0 表示一次最多推开一个"碰撞直径"距离；8 次迭代总上限 ~8*minDist 足以解开任何穿透
+    private const float MaxCorrectionRatio = 1.0f;
 
-    // 速度松弛：把跨体修正带来的速度变化再乘一个 <1 的系数，避免"大修正 → 大速度 → 下一帧冲更远 → 抖"
-    // 0.5 意味着只有一半的位置修正会转成速度，剩余能量被耗散掉（相当于隐式塑性/吸能）
-    private const float VelocityRelaxation = 0.5f;
-
-    // 诊断：每 N 帧打一次日志，观察跨体碰撞是否真的在工作、修正幅度多大
-    // 改成 0 可关闭日志
+    // 诊断：每 N 帧打一次日志，改成 0 可关闭
     private const int DebugLogInterval = 60;
 
     public void OnCreate(ref SystemState state)
@@ -238,7 +235,7 @@ public partial struct CrossBodyCollisionSystem : ISystem
             int off = offsets[i];
             float friction = frictions[i];
             ScatterBackToBuffer(posBuf, prevBuf, velBuf, globalPositions, originalPositions, globalInvMasses,
-                off, num, friction, dt, VelocityRelaxation, doDebug, ref clothContacts, ref clothMaxCorr);
+                off, num, friction, dt, doDebug, ref clothContacts, ref clothMaxCorr);
         }
         for (int i = 0; i < numSoft; i++)
         {
@@ -251,7 +248,7 @@ public partial struct CrossBodyCollisionSystem : ISystem
             int off = offsets[idx];
             float friction = frictions[idx];
             ScatterBackToBuffer(posBuf, prevBuf, velBuf, globalPositions, originalPositions, globalInvMasses,
-                off, num, friction, dt, VelocityRelaxation, doDebug, ref softContacts, ref softMaxCorr);
+                off, num, friction, dt, doDebug, ref softContacts, ref softMaxCorr);
         }
 
         if (doDebug)
@@ -278,6 +275,21 @@ public partial struct CrossBodyCollisionSystem : ISystem
         frictions.Dispose();
     }
 
+    // 彻底重写速度处理逻辑：
+    // === 关键洞察 ===
+    // 前面版本错在"手工维护速度"——先算 baseVel，再减去 velFromCorr，再加 relax*velFromCorr，
+    // 再限幅。这一堆操作的语义混乱：当粒子被推开（corr 朝外），位置变了但 prev 没变，
+    // 意味着 (newPos - prev)/dt 自然包含了"分离速度"，这才是物理上正确的速度。
+    // 再去"velocityRelaxation * velFromCorr"反而会抵消掉这个分离趋势 → 看起来像吸引。
+    //
+    // === 新策略（标准 XPBD 做法）===
+    // 1. 位置修正：newPos = oldPos + corr ⇒ 直接写 posBuf
+    // 2. prev 不动（非摩擦情况下）⇒ (newPos - prev)/dt 天然产生分离速度
+    // 3. 摩擦：把 prev 沿切向朝 newPos 拉近一个比例 friction
+    //    ⇒ 结果是切向速度衰减 (1 - friction) 倍，法向速度完全保留
+    // 4. velBuf 就写 (newPos - prev)/dt，不做任何限幅、松弛
+    //
+    // 这是最朴素、物理最正确的做法；不再有"粒子吸引"，穿透也能被正常顶开。
     private static void ScatterBackToBuffer(
         DynamicBuffer<ParticlePosition> posBuf,
         DynamicBuffer<ParticlePrevPosition> prevBuf,
@@ -285,7 +297,7 @@ public partial struct CrossBodyCollisionSystem : ISystem
         NativeArray<float3> globalPositions,
         NativeArray<float3> originalPositions,
         NativeArray<float> globalInvMasses,
-        int offset, int num, float friction, float dt, float velocityRelaxation,
+        int offset, int num, float friction, float dt,
         bool countStats, ref int contactCount, ref float maxCorrLen)
     {
         float invDt = 1f / dt;
@@ -304,36 +316,30 @@ public partial struct CrossBodyCollisionSystem : ISystem
                 if (corrLen > maxCorrLen) maxCorrLen = corrLen;
             }
 
-            // 应用位置修正
+            // 1. 应用位置修正（posBuf[k] 可能已经被 PostSolve 写过 newPos，
+            //    这里的 corr 是 "相对 originalPositions[gi] 的偏移"，要叠加到当前 posBuf 上）
             float3 oldPos = posBuf[k].Value;
             float3 newPos = oldPos + corr;
             posBuf[k] = new ParticlePosition { Value = newPos };
 
-            // 摩擦：沿切向把 prev 朝 pos 拉近
+            // 2. 摩擦：prev 沿切向被朝 newPos 拉近（衰减切向速度）
+            //    注意：法向上 prev 完全不动 → 法向速度 (newPos - prev)/dt 包含了分离趋势 → 不会"吸引"
             float3 prev = prevBuf[k].Value;
             if (friction > 0f)
             {
                 float3 normal = corr / corrLen;
                 float3 disp = newPos - prev;
-                float3 tangent = disp - math.dot(disp, normal) * normal;
-                float tangentLen = math.length(tangent);
-
-                if (tangentLen < 1e-4f)
-                {
-                    prev = newPos;
-                }
-                else
-                {
-                    float fric = math.saturate(friction);
-                    prev += tangent * fric;
-                }
+                float tangDotN = math.dot(disp, normal);
+                float3 tangent = disp - tangDotN * normal;
+                float fric = math.saturate(friction);
+                prev += tangent * fric;
                 prevBuf[k] = new ParticlePrevPosition { Value = prev };
             }
 
-            float3 baseVel = (newPos - prev) * invDt;
-            float3 velFromCorr = corr * invDt;
-            // 从 baseVel 中减去 (1 - relax) * velFromCorr，让修正引入的速度被衰减
-            float3 finalVel = baseVel - (1f - velocityRelaxation) * velFromCorr;
+            // 3. 速度 = (newPos - prev) / dt —— 纯物理推导，不做任何人为限幅/松弛
+            //    这样：沿法向 corr → 产生朝外的分离速度 ✓
+            //          沿切向摩擦 → 产生衰减的切向速度 ✓
+            float3 finalVel = (newPos - prev) * invDt;
             velBuf[k] = new ParticleVelocity { Value = finalVel };
         }
     }

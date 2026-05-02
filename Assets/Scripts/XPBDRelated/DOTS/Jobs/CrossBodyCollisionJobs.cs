@@ -41,7 +41,6 @@ public struct CrossBodyCollisionResolveJob : IJobParallelFor
     public float CellSize;
 
     // 单次迭代单个粒子的最大修正幅度 = MaxCorrectionRatio * (rI + rJ)
-    // 1.0 表示最多一次性推开 1 倍"碰撞直径"的距离，足够把穿透解开但不会跳跃
     public float MaxCorrectionRatio;
 
     public void Execute(int i)
@@ -49,7 +48,6 @@ public struct CrossBodyCollisionResolveJob : IJobParallelFor
         float wI = GlobalInvMasses[i];
         if (wI <= 0f)
         {
-            // 固定粒子：不累积任何修正
             GlobalCorrections[i] = float3.zero;
             return;
         }
@@ -63,10 +61,18 @@ public struct CrossBodyCollisionResolveJob : IJobParallelFor
         int cy = (int)math.floor(posI.y * invCell);
         int cz = (int)math.floor(posI.z * invCell);
 
-        // 加权平均累加器
-        float3 weightedCorr = float3.zero;
-        float totalW = 0f;
-        float maxMinDist = 0f; // 用于最终 clamp
+        // === 重写：单次迭代只处理"最深穿透"的那个邻居 ===
+        // 为什么：之前尝试过"每轴取最大绝对值"→ 方向混乱导致发散；"加权平均法线"→ 
+        //        多邻居方向冲突时幅度不足导致穿透/吸引。都不如最朴素的做法：
+        // 本次迭代只采纳单个最深穿透邻居的推开向量，多邻居通过多次迭代自然收敛。
+        // 这是 Unity Physics / PhysX / Bullet 都使用的"sequential impulse"思路的位置版。
+        // —— 单邻居方向是真实接触法向，没有任何"合成误差"；
+        // —— 多邻居冲突？下一次迭代会选择到当前最深的那个；
+        // —— 配合 NumIterations=6+，足以让所有接触都被逐个解开。
+
+        float3 deepestCorr = float3.zero;
+        float deepestOverlap = 0f;
+        float deepestMinDist = 0f;
 
         for (int dx = -1; dx <= 1; dx++)
         {
@@ -102,7 +108,12 @@ public struct CrossBodyCollisionResolveJob : IJobParallelFor
 
                         if (distSq < 1e-12f)
                         {
-                            dir = new float3(0f, 1f, 0f);
+                            // 退化：两点重合。用稳定的确定性方向避免同向弹飞
+                            int seed = (i - j);
+                            dir = math.normalize(new float3(
+                                ((seed * 12.9898f) % 1f) - 0.5f,
+                                ((seed * 78.2330f) % 1f) - 0.5f + 0.1f,
+                                ((seed * 37.7190f) % 1f) - 0.5f));
                             overlap = minDist;
                         }
                         else
@@ -112,37 +123,34 @@ public struct CrossBodyCollisionResolveJob : IJobParallelFor
                             overlap = minDist - dist;
                         }
 
-                        // 用 overlap 作权重：穿透浅的邻居贡献小，深的贡献大
-                        // 这样密集邻居（浅穿透）被几何平均后不会爆表
-                        float w = overlap;
-                        weightedCorr += shareI * overlap * dir * w;
-                        totalW += w;
-
-                        if (minDist > maxMinDist) maxMinDist = minDist;
+                        // 只记录最深的那个
+                        if (overlap > deepestOverlap)
+                        {
+                            deepestOverlap = overlap;
+                            deepestCorr = dir * (shareI * overlap);
+                            deepestMinDist = minDist;
+                        }
 
                     } while (HashMap.TryGetNextValue(out j, ref it));
                 }
             }
         }
 
-        if (totalW < 1e-8f)
+        if (deepestOverlap <= 0f)
         {
             GlobalCorrections[i] = float3.zero;
             return;
         }
 
-        // 加权平均：得到一个等效的"合力方向 × 平均穿透深度"的修正量
-        float3 finalCorr = weightedCorr / totalW;
-
-        // 夹紧到 MaxCorrectionRatio * minDist，防止极端情况（如初始穿透太深）一帧跳太远
-        float maxLen = MaxCorrectionRatio * maxMinDist;
-        float corrLen = math.length(finalCorr);
+        // 单次迭代幅度限幅（防止初始大穿透一步跳太远）
+        float maxLen = MaxCorrectionRatio * deepestMinDist;
+        float corrLen = math.length(deepestCorr);
         if (corrLen > maxLen && corrLen > 1e-8f)
         {
-            finalCorr *= (maxLen / corrLen);
+            deepestCorr *= (maxLen / corrLen);
         }
 
-        GlobalCorrections[i] = finalCorr;
+        GlobalCorrections[i] = deepestCorr;
     }
 }
 
