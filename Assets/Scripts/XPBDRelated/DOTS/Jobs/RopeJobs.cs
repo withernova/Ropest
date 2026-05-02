@@ -1,11 +1,8 @@
-using Unity.Burst;
+﻿using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
 
-// ============================================================
-// Rope PreSolve Job - 重力积分 + 速度更新（可并行）
-// ============================================================
 [BurstCompile]
 public struct RopePreSolvePointJob : IJobParallelFor
 {
@@ -65,9 +62,6 @@ public struct RopePreSolveGhostJob : IJobParallelFor
     }
 }
 
-// ============================================================
-// Rope Lambda重置 Job
-// ============================================================
 [BurstCompile]
 public struct RopeResetLambdaJob : IJobParallelFor
 {
@@ -94,9 +88,6 @@ public struct RopeResetBendLambdaJob : IJobParallelFor
     }
 }
 
-// ============================================================
-// Rope EdgeConstraint Job（顺序依赖，使用IJob + Burst）
-// ============================================================
 [BurstCompile]
 public struct RopeEdgeConstraintJob : IJob
 {
@@ -112,17 +103,13 @@ public struct RopeEdgeConstraintJob : IJob
     public float GhostDistance;
     public float Dt;
     public int NumPoints;
+    [ReadOnly] public NativeArray<byte> SegmentContactFlags;
 
     public void Execute()
     {
         const float EPSILON = 1e-6f;
         float alpha = Stiffness / (Dt * Dt);
 
-        // === 论文 §6 Fig.7: Bilateral interleaving order ===
-        // 双向交错顺序以避免顺序诱导的自激振荡：
-        // 从两端向中间交错推进，而不是简单的 0,1,2,...,N-1 顺序。
-        // 对 numEdges = NumPoints - 1 条边，访问顺序为:
-        //   0, numEdges-1, 1, numEdges-2, 2, numEdges-3, ...
         int numEdges = NumPoints - 1;
         for (int step = 0; step < numEdges; step++)
         {
@@ -149,6 +136,12 @@ public struct RopeEdgeConstraintJob : IJob
                 PointPos[i + 1] -= dP * PointInvMass[i + 1];
                 Lambda0[i] += deltaLambda;
             }
+
+            // 段一旦处于接触中，只保留长度约束；
+            // 跳过 ghost 相关约束，避免辅助框架持续把中心线拉回碰撞体表面。
+            bool segmentInContact = i < SegmentContactFlags.Length && SegmentContactFlags[i] != 0;
+            if (segmentInContact)
+                continue;
 
             // === 约束2：Ghost点共面约束 ===
             float3 pm = 0.5f * (PointPos[i] + PointPos[i + 1]);
@@ -183,7 +176,7 @@ public struct RopeEdgeConstraintJob : IJob
 
             if (wSum > EPSILON)
             {
-                pm = 0.5f * (PointPos[i] + PointPos[i + 1]); // 修复：原来错误地写成了 PointPos[i] + PointPos[i]
+                pm = 0.5f * (PointPos[i] + PointPos[i + 1]);
                 p2pm = GhostPos[i] - pm;
 
                 float p2pm_mag = math.length(p2pm);
@@ -205,9 +198,6 @@ public struct RopeEdgeConstraintJob : IJob
     }
 }
 
-// ============================================================
-// Rope BendingAndTwisting Constraint Job（顺序依赖，使用IJob + Burst）
-// ============================================================
 [BurstCompile]
 public struct RopeBendTwistConstraintJob : IJob
 {
@@ -225,15 +215,12 @@ public struct RopeBendTwistConstraintJob : IJob
     public float Stiffness;
     public float Dt;
     public int NumPoints;
+    [ReadOnly] public NativeArray<byte> SegmentContactFlags;
 
     public void Execute()
     {
         float alpha = Stiffness / (Dt * Dt);
 
-        // === 论文 §6 Fig.7: Bilateral interleaving order ===
-        // 双向交错顺序避免顺序诱导振荡（"rod vibrates on its own"）。
-        // 对 numBend = NumPoints - 2 个 BendTwist 约束，访问顺序为:
-        //   0, numBend-1, 1, numBend-2, 2, numBend-3, ...
         int numBend = NumPoints - 2;
         for (int step = 0; step < numBend; step++)
         {
@@ -241,6 +228,11 @@ public struct RopeBendTwistConstraintJob : IJob
             int half = step >> 1;
             if ((step & 1) == 0) idx = half;
             else idx = numBend - 1 - half;
+
+            bool leftSegmentInContact = idx < SegmentContactFlags.Length && SegmentContactFlags[idx] != 0;
+            bool rightSegmentInContact = (idx + 1) < SegmentContactFlags.Length && SegmentContactFlags[idx + 1] != 0;
+            if (leftSegmentInContact || rightSegmentInContact)
+                continue;
 
             float halfLength = RestLengths[0] / 2f;
             if (halfLength < 1e-8f) continue;
@@ -260,18 +252,12 @@ public struct RopeBendTwistConstraintJob : IJob
             float3x3 a = ComputeMaterialFrame(PointPos[idx], PointPos[idx + 1], GhostPos[idx]);
             float3x3 b = ComputeMaterialFrame(PointPos[idx + 1], PointPos[idx + 2], GhostPos[idx + 1]);
 
-            // 如果材料坐标系退化（返回了identity），跳过此约束
-            // identity的c2（d3方向）为(0,0,1)，正常情况下不太可能恰好是这个值
-            // 更可靠的检查：验证frame的正交性
             if (math.lengthsq(a.c0) < 0.5f || math.lengthsq(b.c0) < 0.5f) continue;
 
             // 计算Darboux向量
             float3 darboux = ComputeDarbouxVector(a, b, halfLength);
             if (math.any(math.isnan(darboux))) continue;
 
-            // 计算材料坐标系导数 dajpi[axis][point], dbjpi[axis][point]
-            // axis: 0=d1, 1=d2, 2=d3; point: 0=p0, 1=p1, 2=p2(ghost)
-            // 展开为独立变量以避免数组分配
             float3x3 da0p0, da0p1, da0p2;
             float3x3 da1p0, da1p1, da1p2;
             float3x3 da2p0, da2p1, da2p2;
@@ -489,13 +475,6 @@ public struct RopeBendTwistConstraintJob : IJob
         if (math.abs(denom) < 1e-8f) return;
         x = 2.0f / denom;
 
-        // 排列组合索引
-        // c=0: i=0, j=2, k=1
-        // c=1: i=1, j=0, k=2
-        // c=2: i=2, j=1, k=0
-
-        // 获取dajpi和dbjpi的列（按axis索引）
-        // dajpi[axis][point]: da{axis}p{point}
         // 我们需要按 j,k 索引访问
 
         for (int c = 0; c < 3; c++)
@@ -686,16 +665,6 @@ public struct RopeBendTwistConstraintJob : IJob
     }
 }
 
-// ============================================================
-// Rope 解析碰撞约束 Job（Burst 编译，SubStep 内运行）
-// ------------------------------------------------------------
-// 与 Cloth/SoftBody 使用同一套 AnalyticalColliderData，对 pointPos 的
-// 每个粒子做"球/盒推出"修正。只修改单个粒子位置，避免旧方案里
-// CapsuleCollider ComputePenetration 把相邻两个粒子一起平移导致的
-// 1) 相邻段叠加修正（同一粒子被推 2 次，朝法向猛窜）
-// 2) Job 未完成就读 posArr（数据竞争 → 抽搐/闪现）
-// 3) 碰撞后位置破坏绳长，下一帧 EdgeConstraint 弹回 → 抖动
-// ============================================================
 [BurstCompile]
 public struct RopeAnalyticalCollisionJob : IJob
 {
@@ -703,95 +672,162 @@ public struct RopeAnalyticalCollisionJob : IJob
     public NativeArray<float3> PrevPos;
     [ReadOnly] public NativeArray<float> PointInvMass;
     [ReadOnly] public NativeArray<AnalyticalColliderData> Colliders;
-    public float ParticleRadius;   // 绳子半径（cfg.Radius）
-    public float Friction;         // 摩擦系数（0=无摩擦，1=完全粘附）
+    public float ParticleRadius;
+    public float Friction;
     public int NumPoints;
+    public NativeArray<byte> SegmentContactFlags;
 
     public void Execute()
     {
-        // 静摩擦的切向位移阈值：按粒子半径的一个小比例
-        // 切向运动 < staticThresh 时视为"静止接触"，直接锁死 prev（粘附）
-        // 这解决了 BendTwist 约束把"弯曲势能"沿绳轴倾泻出来，导致绳子在平面上
-        // 朝绳方向滑动的问题——只要每 substep 切向漂移在阈值以内，就认为静止。
         float staticThresh = math.max(ParticleRadius * 0.25f, 1e-3f);
+        const float MoveEpsilonSq = 1e-12f;
 
-        for (int i = 0; i < NumPoints; i++)
+        for (int i = 0; i < SegmentContactFlags.Length; i++)
         {
-            if (PointInvMass[i] == 0f) continue;
+            SegmentContactFlags[i] = 0;
+        }
 
-            float3 pos = PointPos[i];
-            if (math.any(math.isnan(pos))) continue;
+        for (int i = 0; i < NumPoints - 1; i++)
+        {
+            float w0 = PointInvMass[i];
+            float w1 = PointInvMass[i + 1];
+            if (w0 == 0f && w1 == 0f) continue;
 
-            float3 prev = PrevPos[i];
+            float3 a = PointPos[i];
+            float3 b = PointPos[i + 1];
+            if (math.any(math.isnan(a)) || math.any(math.isnan(b))) continue;
+
+            float3 prevA = PrevPos[i];
+            float3 prevB = PrevPos[i + 1];
 
             for (int c = 0; c < Colliders.Length; c++)
             {
                 var col = Colliders[c];
-                float3 newPos = pos;
-                float3 hitNormal = float3.zero;
+                float3 correction;
+                float3 hitNormal;
+                float hitT;
                 bool hit = false;
 
                 switch (col.Type)
                 {
                     case AnalyticalColliderType.Sphere:
-                        hit = ResolveSphereCollision(pos, col.Center, col.Radius, ParticleRadius,
-                            out newPos, out hitNormal);
+                        hit = ResolveSphereSegmentCollision(a, b, col.Center, col.Radius, ParticleRadius,
+                            out correction, out hitNormal, out hitT);
                         break;
                     case AnalyticalColliderType.Box:
-                        hit = ResolveBoxCollision(pos, col, ParticleRadius,
-                            out newPos, out hitNormal);
+                        hit = ResolveBoxSegmentCollision(a, b, col, ParticleRadius,
+                            out correction, out hitNormal, out hitT);
+                        break;
+                    default:
+                        correction = float3.zero;
+                        hitNormal = float3.zero;
+                        hitT = 0.5f;
                         break;
                 }
 
-                if (hit)
+                if (!hit) continue;
+
+                SegmentContactFlags[i] = 1;
+
+                ApplySegmentCorrection(ref a, ref b, w0, w1, hitT, correction,
+                    out float3 moveA, out float3 moveB);
+
+                if (Friction > 0f)
                 {
-                    pos = newPos;
+                    if (math.lengthsq(moveA) > MoveEpsilonSq)
+                        ApplyEndpointFriction(ref prevA, a, hitNormal, staticThresh, Friction);
 
-                    if (Friction > 0f)
-                    {
-                        // 注意：此时 pos 已经被推到接触面，disp 反映了"从上一步到当前
-                        // 接触后位置"的位移，包含了 PreSolve 的重力、Edge/BendTwist
-                        // 约束带来的位移之和。切向分量就是将在下一帧变成的"切向速度"
-                        // 来源，必须在这里处理掉，否则会因 BendTwist 回直导致绳子
-                        // 沿切向无休止地滑。
-                        float3 disp = pos - prev;
-                        float normalProj = math.dot(disp, hitNormal);
-                        float3 tangent = disp - normalProj * hitNormal;
-                        float tLen = math.length(tangent);
-
-                        if (tLen < staticThresh)
-                        {
-                            // 静摩擦粘附：切向"小位移"直接归零 → prev = pos。
-                            // 法向速度也一并置零（粒子贴面，既不穿透也不反弹）。
-                            prev = pos;
-                        }
-                        else
-                        {
-                            // 动摩擦：切向位移按 (1 - Friction) 衰减，法向分量保留。
-                            // 法向保留可以让绳子之后能自然离开接触面，避免"吸附到墙上"。
-                            float3 newTangent = tangent * (1f - Friction);
-                            float3 normalComp = normalProj * hitNormal;
-                            prev = pos - (newTangent + normalComp);
-                        }
-                    }
+                    if (math.lengthsq(moveB) > MoveEpsilonSq)
+                        ApplyEndpointFriction(ref prevB, b, hitNormal, staticThresh, Friction);
                 }
             }
 
-            PointPos[i] = pos;
-            PrevPos[i] = prev;
+            PointPos[i] = a;
+            PointPos[i + 1] = b;
+            PrevPos[i] = prevA;
+            PrevPos[i + 1] = prevB;
         }
     }
 
-    static bool ResolveSphereCollision(float3 particlePos, float3 sphereCenter,
-        float sphereRadius, float particleRadius, out float3 newPos, out float3 normal)
+    static void ApplySegmentCorrection(ref float3 a, ref float3 b,
+        float w0, float w1, float t, float3 correction,
+        out float3 moveA, out float3 moveB)
     {
-        float3 diff = particlePos - sphereCenter;
+        if (w0 > 0f && w1 > 0f)
+        {
+            moveA = correction;
+            moveB = correction;
+        }
+        else if (w0 > 0f)
+        {
+            moveA = correction;
+            moveB = float3.zero;
+        }
+        else if (w1 > 0f)
+        {
+            moveA = float3.zero;
+            moveB = correction;
+        }
+        else
+        {
+            moveA = float3.zero;
+            moveB = float3.zero;
+        }
+
+        a += moveA;
+        b += moveB;
+    }
+
+    static void ApplyEndpointFriction(ref float3 prev, float3 pos, float3 normal,
+        float staticThresh, float friction)
+    {
+        float normalLenSq = math.lengthsq(normal);
+        if (normalLenSq < 1e-8f) return;
+
+        float3 n = normal * math.rsqrt(normalLenSq);
+
+        float3 disp = pos - prev;
+        float normalProj = math.dot(disp, n);
+        float3 tangent = disp - normalProj * n;
+        float tLen = math.length(tangent);
+
+        if (tLen < staticThresh)
+        {
+            prev = pos;
+        }
+        else
+        {
+            float3 newTangent = tangent * (1f - friction);
+            float3 normalComp = normalProj * n;
+            prev = pos - (newTangent + normalComp);
+        }
+    }
+
+    static bool ResolveSphereSegmentCollision(float3 a, float3 b, float3 sphereCenter,
+        float sphereRadius, float particleRadius,
+        out float3 correction, out float3 normal, out float t)
+    {
+        const float EPSILON = 1e-8f;
+
+        float3 ab = b - a;
+        float abLenSq = math.lengthsq(ab);
+        if (abLenSq > EPSILON)
+        {
+            t = math.clamp(math.dot(sphereCenter - a, ab) / abLenSq, 0f, 1f);
+        }
+        else
+        {
+            t = 0f;
+        }
+
+        float3 q = a + ab * t;
+        float3 diff = q - sphereCenter;
         float dist = math.length(diff);
         float minDist = sphereRadius + particleRadius;
 
         if (dist < minDist)
         {
-            if (dist > 1e-8f)
+            if (dist > EPSILON)
             {
                 normal = diff / dist;
             }
@@ -799,19 +835,217 @@ public struct RopeAnalyticalCollisionJob : IJob
             {
                 normal = new float3(0f, 1f, 0f);
             }
-            newPos = sphereCenter + normal * minDist;
+
+            correction = normal * (minDist - dist);
             return true;
         }
 
-        newPos = particlePos;
+        correction = float3.zero;
         normal = float3.zero;
         return false;
     }
 
-    static bool ResolveBoxCollision(float3 particlePos, AnalyticalColliderData box,
-        float particleRadius, out float3 newPos, out float3 normal)
+    static bool ResolveBoxSegmentCollision(float3 aWorld, float3 bWorld, AnalyticalColliderData box,
+        float particleRadius, out float3 correction, out float3 normal, out float t)
     {
-        // 世界坐标 → Box 本地坐标
+        const float EPSILON = 1e-8f;
+
+        float3 a = math.mul(box.InvRotation, aWorld - box.Center);
+        float3 b = math.mul(box.InvRotation, bWorld - box.Center);
+        float3 d = b - a;
+        float3 expandedHalf = box.HalfExtents + particleRadius;
+
+        float tEnter = 0f;
+        float tExit = 1f;
+        int enterAxis = -1;
+        float enterSign = 0f;
+
+        for (int axis = 0; axis < 3; axis++)
+        {
+            float aComp = GetAxis(a, axis);
+            float dComp = GetAxis(d, axis);
+            float half = GetAxis(expandedHalf, axis);
+
+            if (math.abs(dComp) < EPSILON)
+            {
+                if (aComp < -half || aComp > half)
+                {
+                    correction = float3.zero;
+                    normal = float3.zero;
+                    t = 0f;
+                    return false;
+                }
+
+                continue;
+            }
+
+            float tNear = (-half - aComp) / dComp;
+            float tFar = (half - aComp) / dComp;
+            float nearSign = -1f;
+
+            if (tNear > tFar)
+            {
+                float tmp = tNear;
+                tNear = tFar;
+                tFar = tmp;
+                nearSign = 1f;
+            }
+
+            if (tNear > tEnter)
+            {
+                tEnter = tNear;
+                enterAxis = axis;
+                enterSign = nearSign;
+            }
+
+            tExit = math.min(tExit, tFar);
+
+            if (tEnter > tExit)
+            {
+                correction = float3.zero;
+                normal = float3.zero;
+                t = 0f;
+                return false;
+            }
+        }
+
+        if (tExit < 0f || tEnter > 1f)
+        {
+            correction = float3.zero;
+            normal = float3.zero;
+            t = 0f;
+            return false;
+        }
+
+        float clampedEnter = math.clamp(tEnter, 0f, 1f);
+        float clampedExit = math.clamp(tExit, 0f, 1f);
+        if (clampedEnter > clampedExit)
+        {
+            correction = float3.zero;
+            normal = float3.zero;
+            t = 0f;
+            return false;
+        }
+
+        t = 0.5f * (clampedEnter + clampedExit);
+        float3 q = a + d * t;
+
+        float3 penetration = expandedHalf - math.abs(q);
+        if (penetration.x < 0f || penetration.y < 0f || penetration.z < 0f)
+        {
+            correction = float3.zero;
+            normal = float3.zero;
+            t = 0f;
+            return false;
+        }
+
+        int axisIndex = 0;
+        float depth = penetration.x;
+        if (penetration.y < depth)
+        {
+            axisIndex = 1;
+            depth = penetration.y;
+        }
+        if (penetration.z < depth)
+        {
+            axisIndex = 2;
+            depth = penetration.z;
+        }
+
+        float sign = math.sign(GetAxis(q, axisIndex));
+        if (sign == 0f)
+        {
+            if (enterAxis == axisIndex && enterSign != 0f)
+                sign = enterSign;
+            else
+            {
+                float dirComp = GetAxis(d, axisIndex);
+                sign = dirComp >= 0f ? 1f : -1f;
+            }
+        }
+
+        float3 localNormal = AxisVector(axisIndex) * sign;
+        float3 localCorrection = localNormal * depth;
+
+        correction = math.mul(box.Rotation, localCorrection);
+        normal = math.mul(box.Rotation, localNormal);
+        return true;
+    }
+
+    static float GetAxis(float3 v, int axis)
+    {
+        switch (axis)
+        {
+            case 0: return v.x;
+            case 1: return v.y;
+            default: return v.z;
+        }
+    }
+
+    static float3 AxisVector(int axis)
+    {
+        switch (axis)
+        {
+            case 0: return new float3(1f, 0f, 0f);
+            case 1: return new float3(0f, 1f, 0f);
+            default: return new float3(0f, 0f, 1f);
+        }
+    }
+}
+
+[BurstCompile]
+public struct RopeGhostAnalyticalCollisionJob : IJobParallelFor
+{
+    public NativeArray<float3> GhostPos;
+    [ReadOnly] public NativeArray<float> GhostInvMass;
+    [ReadOnly] public NativeArray<AnalyticalColliderData> Colliders;
+    public float GhostCollisionRadius;
+
+    public void Execute(int i)
+    {
+        if (GhostInvMass[i] == 0f) return;
+
+        float3 pos = GhostPos[i];
+        if (math.any(math.isnan(pos))) return;
+
+        for (int c = 0; c < Colliders.Length; c++)
+        {
+            var col = Colliders[c];
+            switch (col.Type)
+            {
+                case AnalyticalColliderType.Sphere:
+                    pos = ResolveSphereCollision(pos, col.Center, col.Radius, GhostCollisionRadius);
+                    break;
+                case AnalyticalColliderType.Box:
+                    pos = ResolveBoxCollision(pos, col, GhostCollisionRadius);
+                    break;
+            }
+        }
+
+        GhostPos[i] = pos;
+    }
+
+    static float3 ResolveSphereCollision(float3 particlePos, float3 sphereCenter, float sphereRadius, float particleRadius)
+    {
+        float3 diff = particlePos - sphereCenter;
+        float dist = math.length(diff);
+        float minDist = sphereRadius + particleRadius;
+
+        if (dist < minDist && dist > 1e-8f)
+        {
+            float3 dir = diff / dist;
+            particlePos = sphereCenter + dir * minDist;
+        }
+        else if (dist <= 1e-8f)
+        {
+            particlePos = sphereCenter + new float3(0f, 1f, 0f) * minDist;
+        }
+
+        return particlePos;
+    }
+
+    static float3 ResolveBoxCollision(float3 particlePos, AnalyticalColliderData box, float particleRadius)
+    {
         float3 localPos = math.mul(box.InvRotation, particlePos - box.Center);
         float3 expandedHalf = box.HalfExtents + particleRadius;
 
@@ -820,43 +1054,38 @@ public struct RopeAnalyticalCollisionJob : IJob
             math.abs(localPos.z) < expandedHalf.z)
         {
             float3 penetration = expandedHalf - math.abs(localPos);
-            float3 sign = math.sign(localPos);
-            // 防止 localPos 某轴为 0 导致 sign 为 0
-            if (sign.x == 0f) sign.x = 1f;
-            if (sign.y == 0f) sign.y = 1f;
-            if (sign.z == 0f) sign.z = 1f;
-
-            float3 localNormal;
-            if (penetration.x <= penetration.y && penetration.x <= penetration.z)
+            int axisIndex = 0;
+            float depth = penetration.x;
+            if (penetration.y < depth)
             {
-                localPos.x = sign.x * expandedHalf.x;
-                localNormal = new float3(sign.x, 0f, 0f);
+                axisIndex = 1;
+                depth = penetration.y;
             }
-            else if (penetration.y <= penetration.z)
+            if (penetration.z < depth)
             {
-                localPos.y = sign.y * expandedHalf.y;
-                localNormal = new float3(0f, sign.y, 0f);
-            }
-            else
-            {
-                localPos.z = sign.z * expandedHalf.z;
-                localNormal = new float3(0f, 0f, sign.z);
+                axisIndex = 2;
             }
 
-            newPos = math.mul(box.Rotation, localPos) + box.Center;
-            normal = math.mul(box.Rotation, localNormal);
-            return true;
+            switch (axisIndex)
+            {
+                case 0:
+                    localPos.x = (localPos.x >= 0f ? 1f : -1f) * expandedHalf.x;
+                    break;
+                case 1:
+                    localPos.y = (localPos.y >= 0f ? 1f : -1f) * expandedHalf.y;
+                    break;
+                default:
+                    localPos.z = (localPos.z >= 0f ? 1f : -1f) * expandedHalf.z;
+                    break;
+            }
+
+            particlePos = math.mul(box.Rotation, localPos) + box.Center;
         }
 
-        newPos = particlePos;
-        normal = float3.zero;
-        return false;
+        return particlePos;
     }
 }
 
-// ============================================================
-// Rope PostSolve - 分两步：先更新速度+阻尼（并行），再更新GhostVels（并行，因为Vel已全部写完）
-// ============================================================
 [BurstCompile]
 public struct RopePostSolveVelocityJob : IJobParallelFor
 {
@@ -895,9 +1124,6 @@ public struct RopePostSolveGhostVelJob : IJobParallelFor
     }
 }
 
-// ============================================================
-// Rope Cosserat渲染插值 Job（Burst加速）
-// ============================================================
 [BurstCompile]
 public struct RopeRenderingJob : IJob
 {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using Unity.VisualScripting;
@@ -24,9 +24,6 @@ public class Cloth : MonoBehaviour
     public Vector3 meshOrigin;
     public Material clothMaterial;
     
-    //private List<Tuple<Vector3, Vector3>> vertice_force;
-    //public List<Vector3> verticeInCollider;
-
     // Solver
     public ClothXPBDSolver solver;
 
@@ -124,9 +121,6 @@ public class Cloth : MonoBehaviour
                     Vector3 v1_ = (v1 * (m1 - m2) + 2 * m2 * v2) / (m1 + m2);
                     Vector3 v2_ = (v2 * (m2 - m1) + 2 * m1 * v1) / (m1 + m2);
                     
-                    //Debug.Log(m1);
-                    //Debug.Log(v1);
-                    //Debug.Log(v2_);
                     
                     
                     solver.vel[index] = v1_;

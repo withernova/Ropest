@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Collections;
 using System.Collections.Generic;
 using Unity.VisualScripting;
@@ -35,7 +35,7 @@ public class ResourcesPool : SingletonForMonoBehaviour<ResourcesPool>
         var template = Resources.Load<GameObject>("Prefabs/" + url);
         if (null == template)
         {
-            Debug.LogError("¹¹½¨³ØÊ§°Ü£¬Ä¿±êÂ·¾¶" + url + "ÎÞÊµ¼Ê¶ÔÏó");
+            Debug.LogError("ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê§ï¿½Ü£ï¿½Ä¿ï¿½ï¿½Â·ï¿½ï¿½" + url + "ï¿½ï¿½Êµï¿½Ê¶ï¿½ï¿½ï¿½");
         }
 
         c.Init(template, preGenerateCount);

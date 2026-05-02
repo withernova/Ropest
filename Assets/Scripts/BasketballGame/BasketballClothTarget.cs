@@ -1,17 +1,9 @@
-using Unity.Entities;
+﻿using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
 
 namespace BasketballGame
 {
-    /// <summary>
-    /// 布料目标：一张从地下升起的"布门帘"。
-    /// 职责：
-    /// 1. 生命周期：升起 -> 等待投中 -> 投中后落下销毁
-    /// 2. 检测球是否持续停留在"布料中心 + 半径"球体内，满足时长后计分
-    ///
-    /// 构造由 BasketballClothSpawner 完成（挂好 ClothRuntimeSpawner 并设置好参数）
-    /// </summary>
     [RequireComponent(typeof(ClothRuntimeSpawner))]
     public class BasketballClothTarget : MonoBehaviour
     {
@@ -54,39 +46,21 @@ namespace BasketballGame
         private ClothRuntimeSpawner _spawner;
         private EntityManager _em;
         private Entity _cachedEntity = Entity.Null;
-        private Vector3 _startWorldOrigin;  // 升起动画"视觉起点"：目标位置下方一段距离（仅视觉用，粒子不会真的生成到这里）
-        private Vector3 _targetWorldOrigin; // 布料最终中心位置（粒子实际生成于此，避免穿过地面）
+        private Vector3 _startWorldOrigin;
+        private Vector3 _targetWorldOrigin;
         private Vector3 _facePlayerDir = Vector3.back; // 布面朝向玩家的方向（单位向量）
         private float _animTimer;
         private float _lifeTimer;
         private float _stayTimer;
 
-        // 粒子初始化：ClothRuntimeSpawner.Start 跑完后，第一次 LateUpdate 时
-        //   - 把所有粒子从"水平平铺"旋转到"竖直面向玩家"
-        //   - 记录每个粒子的"最终世界目标位置"（含四角朝中心收近）
-        //
-        // 升降动画策略（修复：全程保持物理模拟）：
-        //   - Rising/Falling：每帧只把"固定点（四角）"平滑位移到 目标位置 + 纵向偏移，
-        //     中间粒子由 XPBD 物理正常仿真（重力 + 距离约束 + 碰撞），
-        //     因此布料在升起/落下的过程中会自然飘动，不再是僵硬的整体平移。
-        //   - Active：只钉固定点在最终目标位置（与之前一致）。
-        //
-        // 初始化时：把所有粒子整体放到"Rising 阶段 s=0"位置（地下附近，但仍在空中，
-        //   不触发地面碰撞），让物理从那里开始跑；第一帧起固定点就开始往上移动，
-        //   物理把中间粒子顺势拉起来。
         private bool _particleInitialized = false;
+        private bool _meshRendererReadyToEnable = false; // InitializeParticleLayout 成功后延迟一帧启用 MeshRenderer，避免闪帧
         private Vector3[] _particleTargetPositions; // 所有粒子的最终世界位置
 
         public State CurrentState { get; private set; } = State.Rising;
 
-        /// <summary>
-        /// 布料世界空间中心（粒子质心），每帧更新
-        /// </summary>
         public Vector3 Center { get; private set; }
 
-        /// <summary>
-        /// 当前停留计时 0..required，用于UI显示
-        /// </summary>
         public float StayProgress01
         {
             get
@@ -97,9 +71,6 @@ namespace BasketballGame
             }
         }
 
-        // =========================================================
-        // 初始化：由 Spawner 调用，设定升起起点/终点（布料中心的世界坐标）
-        // =========================================================
         public void Init(Vector3 targetCenterWorld, float visualRiseHeight = 6f)
         {
             _targetWorldOrigin = targetCenterWorld;
@@ -117,11 +88,13 @@ namespace BasketballGame
             _startWorldOrigin = targetCenterWorld + Vector3.down * visualRiseHeight;
 
             _spawner = GetComponent<ClothRuntimeSpawner>();
-            // 关键修复：直接把 meshOrigin 设为"目标位置左下角"，粒子一开始就在空中目标位置生成，
-            //          不会穿过地面，物理仿真稳定。
-            //          "从地下升起"的视觉效果由 LateUpdate 中覆盖写入粒子位置实现。
             Vector3 cornerOffset = new Vector3(_spawner.length * 0.5f, 0f, _spawner.width * 0.5f);
-            _spawner.meshOrigin = _targetWorldOrigin - cornerOffset;
+            // 关键：meshOrigin 以"地下起点"为基准，而非目标世界位置。
+            // 否则 ClothRuntimeSpawner.Start() 在第一帧会把一张水平大平板直接渲染到目标高度，
+            // 导致画面出现"在相机前闪一下一块水平布"的 bug —— 直到 LateUpdate 里
+            // InitializeParticleLayout 跑完，粒子才被旋转/下沉到真正的起点。
+            // 放到地下就算 ClothRuntimeSpawner 第一帧渲染了水平初始网格也看不见。
+            _spawner.meshOrigin = _startWorldOrigin - cornerOffset;
 
             // 朝向玩家的方向（XZ 平面）
             var gm = BasketballGameManager.Instance;
@@ -167,12 +140,6 @@ namespace BasketballGame
             }
         }
 
-        // =========================================================
-        // 升降动画（修复：全程保持物理模拟）：
-        //   - Rising/Falling 阶段：只把固定点（四个角）在"地下起点 ↔ 最终目标位置"之间平滑位移，
-        //     其余粒子由 XPBD 物理正常仿真，从而布料在升起/落下过程中也会自然飘动；
-        //   - Active 阶段：固定点钉在最终目标位置。
-        // =========================================================
         private void UpdateAnimation()
         {
             var entity = FindEntity();
@@ -194,13 +161,19 @@ namespace BasketballGame
                     return;
                 }
                 _particleInitialized = true;
+                _meshRendererReadyToEnable = true; // 下一帧再启用 MeshRenderer，等 MeshUpdateSystem 把粒子位置刷到 mesh 顶点后再显示
                 Debug.Log($"[ClothTarget/{name}] InitializeParticleLayout OK. particleCount={_particleTargetPositions?.Length}, state={CurrentState}");
             }
+            else if (_meshRendererReadyToEnable)
+            {
+                // 现在是 InitializeParticleLayout 成功后的"下一帧"。
+                // 此时 ECS 的 MeshUpdateSystem 已经至少跑过一次，clothMesh 顶点已经对应起点布兜位置；
+                // 再启用 MeshRenderer 就不会有任何闪帧了。
+                var mr = GetComponent<MeshRenderer>();
+                if (mr != null) mr.enabled = true;
+                _meshRendererReadyToEnable = false;
+            }
 
-            // 根据当前状态写入碰撞开关：
-            //   - Rising/Falling：关闭和场景（地板）+ 跨体（球）的碰撞，
-            //     避免四角强制动画把中间粒子瞬间塞进地面/球，引起 mesh 明显穿模/扭曲；
-            //   - Active：开启全部碰撞，恢复正常交互。
             bool skipCollision = (CurrentState == State.Rising || CurrentState == State.Falling);
             SetClothCollisionEnabled(entity, !skipCollision);
 
@@ -247,12 +220,6 @@ namespace BasketballGame
             }
         }
 
-        /// <summary>
-        /// 第一次拿到 Entity 时：
-        ///  1) 把所有粒子绕"布料中心"旋转，使布面法线指向玩家（竖直朝向玩家）
-        ///  2) 对四角（固定点）按 cornerPinchAmount 朝中心收近
-        ///  3) 记录每个粒子"最终世界目标位置"到 _particleTargetPositions
-        /// </summary>
         private bool InitializeParticleLayout(Entity entity)
         {
             if (!_em.HasBuffer<ParticlePosition>(entity))
@@ -297,10 +264,6 @@ namespace BasketballGame
                 }
             }
 
-            // 额外倾斜：让布面绕水平右轴向玩家反方向后仰 tiltAngleTowardsPlayer 度
-            // 效果：布面变成"底边近玩家、顶边远玩家"的后仰斜面 + 中心相对玩家反方向下凹 = 朝玩家方向张口的斜盆
-            //      球从玩家方向飞来、下落时会打在斜面上被导向凹陷中心，不再弹走
-            // 旋转轴 = 与水平面平行、与 _facePlayerDir 垂直的轴（即水平"右向量"）
             Vector3 tiltAxis = Vector3.Cross(Vector3.up, _facePlayerDir).normalized;
             if (tiltAxis.sqrMagnitude < 1e-6f) tiltAxis = Vector3.right;
             if (verticalFacingPlayer && Mathf.Abs(tiltAngleTowardsPlayer) > 1e-3f)
@@ -352,12 +315,7 @@ namespace BasketballGame
                 _particleTargetPositions[i] = finalPos;
             }
 
-            // 立即把粒子写到"Rising 阶段 s=0"位置（视觉起点：目标位置下方 visualRiseHeight 米）
-            // 并清零速度 + prevPos = pos
-            // 注意：中间粒子一起偏移到起点，这样它们和固定点一开始就在同一高度，
-            //       距离约束不会一瞬间把布料拉得剧烈变形；随后固定点升起时，
-            //       物理会自然地把整张布从地下拉到空中，过程中有飘动。
-            Vector3 initialOffset = _startWorldOrigin - _targetWorldOrigin; // = (0, -visualRiseHeight, 0)
+            Vector3 initialOffset = _startWorldOrigin - _targetWorldOrigin;
             for (int i = 0; i < posBuf.Length; i++)
             {
                 Vector3 p = _particleTargetPositions[i] + initialOffset;
@@ -372,11 +330,6 @@ namespace BasketballGame
             return true;
         }
 
-        /// <summary>
-        /// 只把固定点（invMass=0 的四个角）平滑位移到"目标位置 + 升降偏移"。
-        /// 其余粒子完全由 XPBD 物理仿真接管，因此布料在升起/落下过程中也会自然飘动。
-        /// </summary>
-        /// <param name="s">升降进度：0=在地下起点，1=在空中目标位置</param>
         private void WriteFixedVerticesOnly(Entity entity, float s)
         {
             if (_particleTargetPositions == null) return;
@@ -403,9 +356,6 @@ namespace BasketballGame
             }
         }
 
-        // =========================================================
-        // 计分：球质心持续停留在"布料中心+触发半径"内达到 requiredStayDuration
-        // =========================================================
         private void UpdateCenter()
         {
             var entity = FindEntity();
@@ -454,9 +404,6 @@ namespace BasketballGame
             }
         }
 
-        // =========================================================
-        // 状态切换
-        // =========================================================
         public void FallAndDestroy()
         {
             if (CurrentState == State.Falling || CurrentState == State.Scored) return;
@@ -469,10 +416,6 @@ namespace BasketballGame
             Destroy(gameObject);
         }
 
-        // =========================================================
-        // 碰撞开关：通过写 ClothSolverConfig 的 Skip 标志，
-        // 让 ClothSimulationSystem / CrossBodyCollisionSystem 本帧跳过布料碰撞
-        // =========================================================
         private bool _lastCollisionEnabled = true;
         private void SetClothCollisionEnabled(Entity entity, bool enabled)
         {
@@ -488,9 +431,6 @@ namespace BasketballGame
             _lastCollisionEnabled = enabled;
         }
 
-        // =========================================================
-        // 实体查找（缓存）
-        // =========================================================
         private Entity FindEntity()
         {
             if (_cachedEntity != Entity.Null && _em.Exists(_cachedEntity))

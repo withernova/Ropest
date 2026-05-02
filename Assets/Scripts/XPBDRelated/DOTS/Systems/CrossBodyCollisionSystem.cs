@@ -1,24 +1,9 @@
-using Unity.Collections;
+﻿using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
 using UnityEngine;
 
-/// <summary>
-/// 跨体碰撞系统 - 处理不同实体（Cloth/SoftBody）之间的粒子-粒子碰撞
-/// 调度位置：在 ClothSimulationSystem 和 SoftBodySimulationSystem 之后、XPBDCollisionSystem 之前
-///
-/// 工作流程（每帧）：
-///   1) 主线程：收集所有 Cloth + SoftBody 实体的 Buffer 数据到全局扁平 NativeArray
-///   2) 迭代 N 次：BuildHash → Resolve → Apply
-///   3) 主线程：把"净修正 = GlobalPositions - OriginalPositions"写回各实体 Buffer
-///      同时同步更新 Velocity = (new_pos - prev_pos) / dt，让修正立刻体现在速度上
-///      （否则下一帧 PreSolve 基于旧速度积分，视觉上会"延迟"甚至"不动"）
-///
-/// 设计要点：
-///   - 所有 Buffer 访问都在主线程完成，避免"边 Schedule 边 GetBuffer"的 AtomicSafety 冲突
-///   - Velocity 同步更新是让双向形变耦合立刻可见的关键
-/// </summary>
 [UpdateInGroup(typeof(FixedStepSimulationSystemGroup))]
 [UpdateAfter(typeof(ClothSimulationSystem))]
 [UpdateAfter(typeof(SoftBodySimulationSystem))]
@@ -33,9 +18,6 @@ public partial struct CrossBodyCollisionSystem : ISystem
     // 跨体摩擦：用于耗散切向速度，防止粒子在对方表面无限滑动
     private const float CrossBodyFriction = 0.2f;
 
-    // 单次迭代单个粒子最大修正幅度 = 该比例 × (rI+rJ)
-    // 0.6 表示一次最多把穿透推开 60% 的"碰撞直径"，剩余穿透下一次迭代继续解
-    // 这样可以避免单帧跳跃，从而避免"突出/抽搐"
     private const float MaxCorrectionRatio = 0.6f;
 
     // 速度松弛：把跨体修正带来的速度变化再乘一个 <1 的系数，避免"大修正 → 大速度 → 下一帧冲更远 → 抖"
@@ -296,10 +278,6 @@ public partial struct CrossBodyCollisionSystem : ISystem
         frictions.Dispose();
     }
 
-    /// <summary>
-    /// 主线程：把净修正写回实体 Buffer，并同步更新速度（关键：让碰撞效果立即可见，而非延迟一帧）
-    /// velocityRelaxation：把修正导致的速度变化乘以此系数（<1），避免"大修正 → 大速度 → 下帧冲更深 → 再弹开"的抖动循环。
-    /// </summary>
     private static void ScatterBackToBuffer(
         DynamicBuffer<ParticlePosition> posBuf,
         DynamicBuffer<ParticlePrevPosition> prevBuf,
@@ -352,10 +330,6 @@ public partial struct CrossBodyCollisionSystem : ISystem
                 prevBuf[k] = new ParticlePrevPosition { Value = prev };
             }
 
-            // 同步更新速度：但只把 velocityRelaxation 比例的修正转成速度变化，
-            // 其余部分被"吸能"掉，避免震荡。
-            // 公式：newVel = oldVel + (corr * velocityRelaxation) / dt
-            //      等价于 (newPos - prev) * invDt 再减去 (1-relax) * corr * invDt
             float3 baseVel = (newPos - prev) * invDt;
             float3 velFromCorr = corr * invDt;
             // 从 baseVel 中减去 (1 - relax) * velFromCorr，让修正引入的速度被衰减

@@ -66,9 +66,6 @@ public class DistanceConstraint : Constraint
             float w0 = mySolver.invMass[id0];
             float w1 = mySolver.invMass[id1];
 
-            //The current length of the edge l
-
-            //x0-x1
             //The result is stored in grads array
             Vector3 id0_minus_id1 = mySolver.pos[id0] - mySolver.pos[id1];
 
@@ -158,9 +155,6 @@ public class SectionDistanceConstraint : Constraint
             float w0 = mySolver.invMass[id0];
             float w1 = mySolver.invMass[id1];
 
-            //The current length of the edge l
-
-            //x0-x1
             //The result is stored in grads array
             Vector3 id0_minus_id1 = mySolver.pos[id0] - mySolver.pos[id1];
 
@@ -359,9 +353,9 @@ public class VolumeConstraint : Constraint
         int index2 = triangle.pointsId[1];
         int index3 = triangle.pointsId[2];
 
-        float mass1 = 1;//mySolver.invMass[index1] != 0 ? 1 / mySolver.invMass[index1] : 0;
-        float mass2 = 1;// mySolver.invMass[index2] != 0 ? 1 / mySolver.invMass[index2] : 0;
-        float mass3 = 1;// mySolver.invMass[index3] != 0 ? 1 / mySolver.invMass[index3] : 0;
+        float mass1 = 1;
+        float mass2 = 1;
+        float mass3 = 1;
 
         return (mySolver.pos[index1] * 100 * mass1 + mySolver.pos[index2] * 100 * mass2 + mySolver.pos[index3] * 100 * mass3) / (mass1 + mass2 + mass3);
     }
@@ -400,7 +394,7 @@ public class VolumeConstraint : Constraint
                            triangle.initialMatrix.m01 * (triangle.initialMatrix.m10 * triangle.initialMatrix.m22 - triangle.initialMatrix.m12 * triangle.initialMatrix.m20) +
                            triangle.initialMatrix.m02 * (triangle.initialMatrix.m10 * triangle.initialMatrix.m21 - triangle.initialMatrix.m11 * triangle.initialMatrix.m20);
 
-        return CalcDet(currentMatrix) - CalcDet(triangle.initialMatrix);//detCurrent - detInitial;
+        return CalcDet(currentMatrix) - CalcDet(triangle.initialMatrix);
     }
 
     public float CalcDet(Matrix4x4 mat)
@@ -425,12 +419,12 @@ public class VolumeConstraint : Constraint
         Vector3 p3_p0 = p3 - curCentroid;  // x3 - x0
 
         // 根据公式计算各个点的梯度
-        grad1 = Vector3.Cross(p2_p0, p3_p0);  // ∇x1C = (x2 - x0) × (x3 - x0)
-        grad2 = Vector3.Cross(p3_p0, p1_p0);  // ∇x2C = (x3 - x0) × (x1 - x0)
-        grad3 = Vector3.Cross(p1_p0, p2_p0);  // ∇x3C = (x1 - x0) × (x2 - x0)
+        grad1 = Vector3.Cross(p2_p0, p3_p0);
+        grad2 = Vector3.Cross(p3_p0, p1_p0);
+        grad3 = Vector3.Cross(p1_p0, p2_p0);
 
         // 计算质心的梯度
-        grad0 = -(grad1 + grad2 + grad3);     // ∇x0C = -∇x1C - ∇x2C - ∇x3C
+        grad0 = -(grad1 + grad2 + grad3);
     }
 
     public override void SolveConstraint(float dt)
@@ -450,9 +444,9 @@ public class VolumeConstraint : Constraint
             CalculateGrad(triangle, out grad1, out grad2, out grad3, out grad0);
 
             // 计算分母
-            float w1 = 1; //mySolver.invMass[triangle.pointsId[0]];
-            float w2 = 1;// mySolver.invMass[triangle.pointsId[1]];
-            float w3 = 1;// mySolver.invMass[triangle.pointsId[2]];
+            float w1 = 1;
+            float w2 = 1;
+            float w3 = 1;
 
             float denominator =
                 w1 * grad1.magnitude * grad1.magnitude +
@@ -463,9 +457,6 @@ public class VolumeConstraint : Constraint
             // 计算delta_lambda并累加到总lambda
             float deltaLambda = denominator != 0.0f ? -(C + compliance * triangle.lambda) / denominator : 0.0f;
             triangle.lambda += deltaLambda;
-            //Debug.Log("lambda:" + triangle.lambda);
-
-            //Debug.Log($"{w1} * {deltaLambda} * {grad1}");
             // 使用累加的lambda更新位置
             if (w1 > 0) mySolver.pos[triangle.pointsId[0]] += w1 * deltaLambda * grad1 / 100;
             if (w2 > 0) mySolver.pos[triangle.pointsId[1]] += w2 * deltaLambda * grad2 / 100;
@@ -808,9 +799,6 @@ public class Volume2Constraint : Constraint
 
         float C = currentVolume - oriVolume;
 
-        // 如果你想要只在物体“被压缩”时才修正，也可以加个 if(C < 0) 才纠正等逻辑
-        // 但一般全程都修正，以保证体积不发散。
-
         // 3) 计算 XPBD 中的 α = stiffness / dt^2
         float alpha = stiff / (dt * dt);
 
@@ -844,9 +832,6 @@ public class Volume2Constraint : Constraint
         // 更新本约束的 λ
         lambda += deltalambda;
 
-        // 6) 根据 deltalambda 给每个顶点做位置修正
-        //   Δxᵢ = - (deltalambda * wᵢ) * gradC[i]
-        //   (注意符号，有些实现里写成 “+”，主要看公式里 C 的正负，这里习惯用“负号”)
         for (int i = 0; i < mySolver.numParticles; i++)
         {
             float w_i = mySolver.invMass[i];
@@ -1013,7 +998,7 @@ public class BendingConstraint : Constraint
         Vector3 q2 = (Vector3.Cross(p2, p3).magnitude != 0 && Vector3.Cross(p2, p4).magnitude != 0) ? -(Vector3.Cross(p3, n2) + (Vector3.Cross(n1, p3) * d)) / Vector3.Cross(p2, p3).magnitude - (Vector3.Cross(p4, n1) + (Vector3.Cross(n2, p4) * d)) / Vector3.Cross(p2, p4).magnitude : Vector3.zero;
 
         if (math.abs(d - 1) < 0.001f) d = 0.9f;
-        float down = 1;/// math.sqrt(1 - d * d);
+        float down = 1;
         //Debug.Log($"{q2} {q3} {q4}");
         return ((-q2 - q3 - q4) * down, q2 * down, q3 * down, q4 * down);
     }
@@ -1445,62 +1430,5 @@ public class SectionAreaConstriant : Constraint
 
 
 
-//public class CollisionConstraint : Constraint
-//{
-//    float restDistance = 0.06f;
 
-//    float[] lambdas;
-//    public CollisionConstraint(ClothXPBDSolver solver) : base(solver)
-//    {
-//        stiff = 0f;
-//        lambdas = new float[mySolver.numParticles];
-
-//    }
-
-//    public override void ResetLambda()
-//    {
-//        lambdas = new float[mySolver.numParticles];
-//    }
-
-
-//    public override void SolveConstraint(float dt)
-//    {
-//        var solver = (ClothXPBDSolver)mySolver;
-//        if (solver.collisions.Count <= 0)
-//        {
-//            return;
-//        }
-//        float alpha = stiff / (math.pow(dt, 2));
-
-
-//        foreach (var pair in solver.collisions)
-//        {
-//            int index = pair.Key;
-//            Vector3 distance = pair.Value;
-
-//            float l = distance.magnitude;
-//            float l_rest = restDistance;
-
-//            float C = l - l_rest;
-//            if (C >= 0.06)
-//            {
-//                continue;
-//            }
-//            //Debug.Log("wawa" +C.ToString());
-
-//            //(xo-x1) * (1/|x0-x1|) = gradC
-//            Vector3 gradC = distance.normalized;
-
-
-//            float wTot = 1;
-
-//            //lambda because |grad_Cn|^2 = 1 because if we move a particle 1 unit, the distance between the particles also grows with 1 unit, and w = w0 + w1
-//            float deltalambda = -(C) / (wTot);
-//            lambdas[index] += deltalambda;
-//            //Move the vertices x = x + deltaX where deltaX = lambda * w * gradC
-//            //Debug.Log($"{index}增加的距离为{deltalambda}");
-//            mySolver.pos[index] += deltalambda * gradC;
-//        }
-//        //solver.collisions.Clear();
-//    }
 //}

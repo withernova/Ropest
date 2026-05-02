@@ -1,21 +1,8 @@
-using System.Collections;
+﻿using System.Collections;
 using UnityEngine;
 
 namespace BasketballGame
 {
-    /// <summary>
-    /// 把 MeshFilter 的 Mesh 改造为"双面可见"：
-    /// 做法是追加一份反向三角形（交换两个索引顺序）到同一 SubMesh 中。
-    /// 
-    /// 使用方式：挂在布料 Prefab 上即可，本脚本会等 ClothRuntimeSpawner 把 mesh 建好后执行一次，
-    /// 与具体材质/shader 无关，比设置 _Cull 更稳妥。
-    ///
-    /// 注意：
-    /// 1. 这只改变"渲染用"的三角形索引，不影响 XPBD 仿真（仿真在自己的 simMesh 上进行）
-    /// 2. MeshUpdateSystem 会每帧 SetVertices，但不会重新 SetTriangles，所以我们 patch 一次即可
-    /// 3. 不要加 [RequireComponent(typeof(MeshFilter))]，因为 ClothRuntimeSpawner 会在 Start 中
-    ///    动态 AddComponent<MeshFilter>，若 GameObject 已有 MeshFilter 会返回 null 导致 NRE。
-    /// </summary>
     public class DoubleSidedMeshPatcher : MonoBehaviour
     {
         [Tooltip("等待几帧后再 patch（给 ClothRuntimeSpawner 的 Start 留时间）")]
@@ -39,10 +26,6 @@ namespace BasketballGame
             if (_patched) return;
             var mf = GetComponent<MeshFilter>();
             if (mf == null) return;
-            // 必须用 sharedMesh：用 .mesh 会触发 Unity 运行时克隆一份新 mesh 实例给 MeshFilter，
-            // 但 ClothMeshUpdateSystem 用的是 ManagedMeshReference.Mesh（原始 clothMesh 引用）
-            // 若在此处克隆，MeshFilter 显示的是克隆体（我们 patch 的那份），
-            // 而 XPBD 每帧写入的是原始 clothMesh，导致布料"看起来从不更新顶点"
             var mesh = mf.sharedMesh;
             if (mesh == null) return;
 

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
@@ -144,10 +144,6 @@ public abstract class XPBDSolver
             Vector3 deltaPos_G = 1f / 2 * g * dt * dt * new Vector3(0, 1, 0);
             Vector3 deltaPos_f = 1f / 2 * f * dt * dt * (pos[i] - prevPos[i]).normalized;
             pos[i] += deltaPos_f + deltaPos_G;
-            // if (i > numParticles / 2)
-            // {
-            //     pos[i] += 1f / 2 * a * dt * dt * new Vector3(0, 1, 0);
-            // }
             vel[i] = (pos[i] - prevPos[i]) * oneOverdt;
         }
     }

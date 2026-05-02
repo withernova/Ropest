@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -43,13 +43,6 @@ public class InteractiveCaster : MonoBehaviour
             LastInteractive();
         }
 
-        //var newInside = a.ToList().Where(item => item.GetComponent<InteractiveBase>() != null && (item.GetComponent<InteractiveBase>().radius == 0 || (item.transform.position - transform.position).magnitude < item.GetComponent<InteractiveBase>().radius));
-
-        //newInside.Where(item => !inside.Contains(item))
-        //    .ToList().ForEach(item => { if (item.GetComponent<InteractiveBase>().outline != null) item.GetComponent<InteractiveBase>().outline.enabled = true; inside.Add(item); });
-
-        //inside.Where(item => !newInside.Contains(item.GetComponent<Collider>())).ToList().ForEach(item => { if (item.GetComponent<InteractiveBase>().outline != null) item.GetComponent<InteractiveBase>().outline.enabled = false; });
-        //inside = a.Where(item => item.GetComponent<InteractiveBase>() != null && (item.GetComponent<InteractiveBase>().radius == 0 || (item.transform.position - transform.position).magnitude < item.GetComponent<InteractiveBase>().radius)).ToList();
         //高亮物体
         //UIManager.instance.showInteractiveUI(a.Length > 0);
     }

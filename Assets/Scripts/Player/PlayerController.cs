@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Cinemachine;
 using NUnit.Framework;
 using Unity.VisualScripting;
@@ -102,13 +102,6 @@ public class PlayerController : MonoBehaviour
         //move += Time.deltaTime * new Vector3(1, 0, 0);
         //move += Time.deltaTime * speed * vertical * horizontalForward + Time.deltaTime * speed * horizontal * right;
         move += Time.deltaTime * speed * (vertical * horizontalForward + horizontal * right).normalized;
-        // if (groundCheckCollider.CompareTag("Ground"))
-        // {s
-        //     if (Input.GetKeyDown(KeyCode.Space))
-        //     {
-        //         move += jumpSpeed * Vector3.up;
-        //     }
-        // }
 
         if (ctrl != null)
         {

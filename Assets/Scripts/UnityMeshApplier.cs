@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,7 +6,7 @@ using UnityEngine;
 
 public class UnityMeshApplier : MonoBehaviour
 {
-    [Header("»·¾³²ÎÊý")]
+    [Header("ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½")]
     [SerializeField] private Vector3 gravity = new(0, -9.8f, 0);
     public bool simulate = true;
     private bool ready = false;
@@ -38,7 +38,7 @@ public class UnityMeshApplier : MonoBehaviour
         GetComponent<MeshRenderer>().material = ropeMaterial;
     }
 
-    // ´¦Àí¶¯×÷ºÍ¸üÐÂmesh
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í¸ï¿½ï¿½ï¿½mesh
     public void Update()
     {
 
@@ -46,7 +46,7 @@ public class UnityMeshApplier : MonoBehaviour
             UpdateMesh();
     }
 
-    // ¼ÆËãºÍÄ£Äâ
+    // ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½
     public void FixedUpdate()
     {
         if (!simulate || !ready)

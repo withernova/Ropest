@@ -1,15 +1,9 @@
-using Unity.Burst;
+﻿using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
 
-/// <summary>
-/// SoftBody XPBD模拟系统 - 在FixedStep中运行
-/// 调度顺序：ResetLambda -> PreSolve -> [SubSteps: Distance + Volume + AnalyticalCollision] -> PostSolve
-/// 可变形软体使用四面体体积约束 + 边距离约束来维持形状
-/// 不需要自碰撞：距离约束+体积约束已足够防止自身穿模
-/// </summary>
 [UpdateInGroup(typeof(FixedStepSimulationSystemGroup))]
 public partial struct SoftBodySimulationSystem : ISystem
 {
@@ -24,8 +18,8 @@ public partial struct SoftBodySimulationSystem : ISystem
             ComponentType.ReadWrite<ParticlePrevPosition>(),
             ComponentType.ReadWrite<ParticleVelocity>(),
             ComponentType.ReadOnly<ParticleInvMass>(),
-            ComponentType.ReadWrite<SoftBodyEdge>(),
-            ComponentType.ReadWrite<SoftBodyDistanceLambda>(),
+            ComponentType.ReadWrite<XPBDEdge>(),
+            ComponentType.ReadWrite<XPBDDistanceLambda>(),
             ComponentType.ReadWrite<Tetrahedron>(),
             ComponentType.ReadWrite<TetrahedronRestVolume>(),
             ComponentType.ReadWrite<TetrahedronVolumeLambda>()
@@ -38,11 +32,6 @@ public partial struct SoftBodySimulationSystem : ISystem
         float dt = SystemAPI.Time.DeltaTime;
         if (dt <= 0f) return;
 
-        // 关键：在主线程上用 EntityManager.GetBuffer 访问 ParticlePosition 等组件之前，
-        // 必须完成所有相关 ComponentType 上的未决读写 Job。
-        // 不用 EntityManager.CompleteAllTrackedJobs()：它会 ClearDependencies()，
-        // 破坏 ECS 的 fence 追踪，会波及其他系统（例如 AnalyticalCollider 相关 Job 链）。
-        // 用 _softBodyQuery.CompleteDependency() 只等 Query 声明的 ComponentType 的 fence，精准无副作用。
         _softBodyQuery.CompleteDependency();
 
         var entities = _softBodyQuery.ToEntityArray(Allocator.Temp);
@@ -53,14 +42,12 @@ public partial struct SoftBodySimulationSystem : ISystem
 
         for (int e = 0; e < entities.Length; e++)
         {
-            // 关键：在用 EntityManager.GetBuffer 同步访问 ParticlePosition 之前，
-            // 必须把上一轮循环里针对该 ComponentType 调度的 Job 全部完成。
-            // ECS 的 AtomicSafety 按 ComponentType 做全局检查，不区分 entity。
             combinedDependency.Complete();
 
             var entity = entities[e];
             var cfg = state.EntityManager.GetComponentData<SoftBodySolverConfig>(entity);
-            int numParticles = cfg.NumParticles;
+            var baseCfg = cfg.Base;
+            int numParticles = baseCfg.NumParticles;
 
             var positions = state.EntityManager.GetBuffer<ParticlePosition>(entity);
 
@@ -70,8 +57,8 @@ public partial struct SoftBodySimulationSystem : ISystem
             var prevPositions = state.EntityManager.GetBuffer<ParticlePrevPosition>(entity);
             var velocities = state.EntityManager.GetBuffer<ParticleVelocity>(entity);
             var invMasses = state.EntityManager.GetBuffer<ParticleInvMass>(entity);
-            var edges = state.EntityManager.GetBuffer<SoftBodyEdge>(entity);
-            var distLambdas = state.EntityManager.GetBuffer<SoftBodyDistanceLambda>(entity);
+            var edges = state.EntityManager.GetBuffer<XPBDEdge>(entity);
+            var distLambdas = state.EntityManager.GetBuffer<XPBDDistanceLambda>(entity);
             var tets = state.EntityManager.GetBuffer<Tetrahedron>(entity);
             var tetRestVols = state.EntityManager.GetBuffer<TetrahedronRestVolume>(entity);
             var volLambdas = state.EntityManager.GetBuffer<TetrahedronVolumeLambda>(entity);
@@ -91,24 +78,24 @@ public partial struct SoftBodySimulationSystem : ISystem
             int edgeCount = edges.Length;
             int tetCount = tets.Length;
 
-            // === 1. 重置Lambda ===
-            var resetDistJob = new SoftBodyResetDistanceLambdaJob { Lambdas = distLambdaArr };
+            // === 1. 重置Lambda（共享 XPBDResetFloatBufferJob） ===
+            var resetDistJob = new XPBDResetFloatBufferJob { Values = distLambdaArr };
             // 注意：依赖必须接在 combinedDependency 之后，避免多个 SoftBody 实体并行写相同 ComponentType。
             var resetDistHandle = resetDistJob.Schedule(edgeCount, 64, combinedDependency);
 
-            var resetVolJob = new SoftBodyResetVolumeLambdaJob { Lambdas = volLambdaArr };
+            var resetVolJob = new XPBDResetFloatBufferJob { Values = volLambdaArr };
             var resetVolHandle = resetVolJob.Schedule(tetCount, 64, combinedDependency);
 
             var resetHandle = JobHandle.CombineDependencies(resetDistHandle, resetVolHandle);
 
-            // === 2. PreSolve ===
-            var preSolveJob = new SoftBodyPreSolveJob
+            // === 2. PreSolve（共享 XPBDPreSolveJob） ===
+            var preSolveJob = new XPBDPreSolveJob
             {
                 Positions = posArr,
                 PrevPositions = prevArr,
                 Velocities = velArr,
                 InvMasses = invMassArr,
-                Gravity = cfg.Gravity,
+                Gravity = baseCfg.Gravity,
                 Dt = dt
             };
             var preSolveHandle = preSolveJob.Schedule(numParticles, 64, resetHandle);
@@ -117,21 +104,21 @@ public partial struct SoftBodySimulationSystem : ISystem
             var colliderData = AnalyticalColliderManager.GetColliderDataForJobs(Allocator.TempJob);
 
             JobHandle constraintHandle = preSolveHandle;
-            for (int step = 0; step < cfg.NumSubSteps; step++)
+            for (int step = 0; step < baseCfg.NumSubSteps; step++)
             {
-                // 距离约束
-                var distJob = new SoftBodyDistanceConstraintJob
+                // 距离约束（共享 XPBDDistanceConstraintJob）
+                var distJob = new XPBDDistanceConstraintJob
                 {
                     Positions = posArr,
                     InvMasses = invMassArr,
                     Edges = edgeArr,
                     Lambdas = distLambdaArr,
-                    Stiffness = cfg.DistanceStiffness,
+                    Stiffness = baseCfg.DistanceStiffness,
                     Dt = dt
                 };
                 constraintHandle = distJob.Schedule(constraintHandle);
 
-                // 体积约束
+                // 体积约束（软体专属）
                 var volJob = new SoftBodyVolumeConstraintJob
                 {
                     Positions = posArr,
@@ -144,25 +131,26 @@ public partial struct SoftBodySimulationSystem : ISystem
                 };
                 constraintHandle = volJob.Schedule(constraintHandle);
 
-                // 解析碰撞
+                // 解析碰撞（共享 XPBDAnalyticalCollisionJob，软体启用摩擦）
                 if (colliderData.Length > 0)
                 {
-                    var analyticalCollisionJob = new SoftBodyAnalyticalCollisionJob
+                    var analyticalCollisionJob = new XPBDAnalyticalCollisionJob
                     {
                         Positions = posArr,
                         PrevPositions = prevArr,
                         InvMasses = invMassArr,
                         Colliders = colliderData,
-                        ParticleRadius = cfg.CollisionRadius,
-                        Friction = cfg.Friction,
-                        NumParticles = numParticles
+                        ParticleRadius = baseCfg.CollisionRadius,
+                        Friction = baseCfg.Friction,
+                        NumParticles = numParticles,
+                        EnableFriction = true
                     };
                     constraintHandle = analyticalCollisionJob.Schedule(constraintHandle);
                 }
             }
 
-            // === 4. PostSolve（含阻尼） ===
-            var postSolveJob = new SoftBodyPostSolveJob
+            // === 4. PostSolve（含阻尼，共享 XPBDPostSolveJob） ===
+            var postSolveJob = new XPBDPostSolveJob
             {
                 Positions = posArr,
                 PrevPositions = prevArr,
@@ -170,7 +158,7 @@ public partial struct SoftBodySimulationSystem : ISystem
                 InvMasses = invMassArr,
                 OneOverDt = 1f / dt,
                 Dt = dt,
-                Damping = cfg.Damping
+                Damping = baseCfg.Damping
             };
             var postSolveHandle = postSolveJob.Schedule(numParticles, 64, constraintHandle);
 

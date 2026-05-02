@@ -1,4 +1,4 @@
-using Unity.Burst;
+﻿using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
@@ -6,19 +6,10 @@ using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-// ============================================================
-// 写回 Mesh 顶点前的 world→local 变换工具 Job
-// Spawner 在创建粒子时，直接把 Mesh 顶点（Mesh 局部坐标）塞进 ParticlePosition 作为
-// 初始 world 位置，所有仿真都用 world 空间（重力/碰撞体/粒子）。
-// 而 MeshFilter 挂在 Spawner 的 GameObject 上，Unity 渲染 Mesh 时会再乘一次
-// localToWorldMatrix。如果该 GameObject 的 transform.position/rotation/scale 不是 identity，
-// 那视觉布料就会被"再平移/旋转/缩放一次"，产生与碰撞体的视觉错位。
-// 解决：写回 Mesh 顶点之前，把粒子 world 位置乘以 worldToLocalMatrix。
-// ============================================================
 [BurstCompile]
 public struct ApplyWorldToLocalPositionsJob : IJobParallelFor
 {
-    public NativeArray<float3> Positions;   // 原地变换：world → local
+    public NativeArray<float3> Positions;
     public float4x4 WorldToLocal;
 
     public void Execute(int i)
@@ -31,9 +22,6 @@ public struct ApplyWorldToLocalPositionsJob : IJobParallelFor
 public struct ApplyWorldToLocalNormalsJob : IJobParallelFor
 {
     public NativeArray<float3> Normals;
-    // 对 Normal 的正确变换应为 (worldToLocal 的 3x3 部分的逆转置)，
-    // 在无非均匀缩放时等价于 worldToLocal 的 3x3 本身。
-    // 这里直接用 3x3 + 归一化，满足大多数情况（均匀缩放）。
     public float3x3 WorldToLocal3x3;
 
     public void Execute(int i)
@@ -44,10 +32,6 @@ public struct ApplyWorldToLocalNormalsJob : IJobParallelFor
     }
 }
 
-/// <summary>
-/// Rope Mesh更新系统 - 在Presentation阶段运行
-/// 将ECS中的粒子数据回写到Unity Mesh
-/// </summary>
 [UpdateInGroup(typeof(PresentationSystemGroup))]
 public partial class RopeMeshUpdateSystem : SystemBase
 {
@@ -74,10 +58,6 @@ public partial class RopeMeshUpdateSystem : SystemBase
 
     protected override void OnUpdate()
     {
-        // 关键：主线程同步访问 ParticlePosition/GhostPosition 等 Buffer 前，
-        // 必须完成上游模拟系统在这些 ComponentType 上调度的未完成 Job。
-        // 用 _ropeQuery.CompleteDependency() 精准等待 Query 声明的 ComponentType 的 fence，
-        // 不会像 CompleteAllTrackedJobs 那样 ClearDependencies 而破坏其他系统的依赖链。
         _ropeQuery.CompleteDependency();
 
         var entities = _ropeQuery.ToEntityArray(Allocator.Temp);
@@ -147,12 +127,6 @@ public partial class RopeMeshUpdateSystem : SystemBase
     }
 }
 
-/// <summary>
-/// Cloth Mesh更新系统 - 在Presentation阶段运行
-/// 支持两种模式：
-/// 1. 直接模式：模拟粒子位置直接写回Mesh顶点
-/// 2. 细分平滑模式：位置线性插值 + 法线平滑插值，实现视觉平滑
-/// </summary>
 [UpdateInGroup(typeof(PresentationSystemGroup))]
 public partial class ClothMeshUpdateSystem : SystemBase
 {
@@ -191,9 +165,6 @@ public partial class ClothMeshUpdateSystem : SystemBase
 
     protected override void OnUpdate()
     {
-        // 关键：主线程同步访问 ParticlePosition 等 Buffer 前，
-        // 必须完成上游模拟系统在这些 ComponentType 上调度的未完成 Job。
-        // 用 _clothQuery.CompleteDependency() 精准等待相关 fence，无副作用。
         _clothQuery.CompleteDependency();
 
         var entities = _clothQuery.ToEntityArray(Allocator.Temp);
@@ -286,9 +257,6 @@ public partial class ClothMeshUpdateSystem : SystemBase
             else
             {
                 int numParticles = cfg.NumParticles;
-                // 粒子是 world 空间，写回 Mesh 前转到 MeshFilter local 空间。
-                // 注意：直接模式下 posArr 指向 DynamicBuffer 的内存，不能原地改！
-                // 这里需要一份临时副本。
                 EnsureCapacity(ref _renderPositions, numParticles);
                 NativeArray<float3>.Copy(posArr, 0, _renderPositions, 0, numParticles);
 
@@ -314,12 +282,6 @@ public partial class ClothMeshUpdateSystem : SystemBase
     }
 }
 
-/// <summary>
-/// SoftBody Mesh更新系统 - 在Presentation阶段运行
-/// 支持两种模式：
-/// 1. 直接模式：模拟粒子位置直接写回Mesh顶点
-/// 2. 细分平滑模式：位置线性插值 + 法线平滑插值，实现视觉平滑
-/// </summary>
 [UpdateInGroup(typeof(PresentationSystemGroup))]
 public partial class SoftBodyMeshUpdateSystem : SystemBase
 {
@@ -358,9 +320,6 @@ public partial class SoftBodyMeshUpdateSystem : SystemBase
 
     protected override void OnUpdate()
     {
-        // 关键：主线程同步访问 ParticlePosition 等 Buffer 前，
-        // 必须完成上游模拟系统在这些 ComponentType 上调度的未完成 Job。
-        // 用 _softBodyQuery.CompleteDependency() 精准等待相关 fence，无副作用。
         _softBodyQuery.CompleteDependency();
 
         var entities = _softBodyQuery.ToEntityArray(Allocator.Temp);
@@ -477,9 +436,6 @@ public partial class SoftBodyMeshUpdateSystem : SystemBase
     }
 }
 
-/// <summary>
-/// 托管Mesh引用组件
-/// </summary>
 public class ManagedMeshReference : IComponentData
 {
     public Mesh Mesh;

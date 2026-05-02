@@ -1,25 +1,8 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 namespace BasketballGame
 {
-    /// <summary>
-    /// 投篮小游戏场景自动搭建器
-    ///
-    /// 使用方法：
-    /// 1. 新建 Scene（建议命名为 BasketballScene.unity）
-    /// 2. 在场景中放一个空 GameObject，挂上 BasketballSceneBootstrap
-    /// 3. 在 Inspector 中把 ballMaterial / clothMaterial 拖进去（可以用任意 URP/Standard 材质）
-    /// 4. 运行即可，脚本会自动生成：
-    ///     - 地面（带 AnalyticalColliderSource）
-    ///     - 玩家站位 + 相机（含 BasketballCameraController + BasketballShooter）
-    ///     - 球 Prefab（代码动态生成）
-    ///     - 布料 Prefab（代码动态生成）
-    ///     - HUD
-    ///     - BasketballGameManager
-    ///     - BasketballClothSpawner
-    ///     - Directional Light
-    /// </summary>
     public class BasketballSceneBootstrap : MonoBehaviour
     {
         [Header("材质")]
@@ -29,7 +12,7 @@ namespace BasketballGame
 
         [Header("球参数")]
         [Range(0.2f, 2f)] public float ballRadius = 0.4f;
-        [Range(1, 8)] public int ballResolution = 3;
+        [Range(1, 20)] public int ballResolution = 3;
 
         [Header("布料参数")]
         [Range(1f, 10f)] public float clothLength = 4f;
@@ -44,9 +27,6 @@ namespace BasketballGame
 
         private void BuildScene()
         {
-            // ============================================================
-            // 1. Directional Light（如果场景里没有光源）
-            // ============================================================
             if (FindObjectOfType<Light>() == null)
             {
                 var lightGo = new GameObject("Sun");
@@ -66,9 +46,6 @@ namespace BasketballGame
             // 布料材质强制双面渲染（URP Lit / Standard 都兼容）
             MakeMaterialDoubleSided(clothMaterial);
 
-            // ============================================================
-            // 2. 地面（Box Collider + AnalyticalColliderSource，给 XPBD 用）
-            // ============================================================
             var ground = GameObject.CreatePrimitive(PrimitiveType.Cube);
             ground.name = "Ground";
             ground.transform.position = new Vector3(0, -0.5f, 10f);
@@ -78,29 +55,17 @@ namespace BasketballGame
             groundColliderSrc.colliderType = AnalyticalColliderType.Box;
             groundColliderSrc.autoDetect = true;
 
-            // ============================================================
-            // 3. 玩家站位
-            // ============================================================
             var playerStandGo = new GameObject("PlayerStand");
             playerStandGo.transform.position = new Vector3(0, 0, 0);
 
-            // ============================================================
-            // 4. 目标区域中心（玩家正前方 6m，靠近玩家方便投篮）
-            // ============================================================
             var targetAreaGo = new GameObject("TargetAreaCenter");
             targetAreaGo.transform.position = new Vector3(0, 0, 6f);
 
-            // ============================================================
-            // 5. GameManager
-            // ============================================================
             var gmGo = new GameObject("BasketballGameManager");
             var gm = gmGo.AddComponent<BasketballGameManager>();
             gm.playerStand = playerStandGo.transform;
             gm.targetAreaCenter = targetAreaGo.transform;
 
-            // ============================================================
-            // 6. 相机（含 CameraController + Shooter）
-            // ============================================================
             Camera cam = Camera.main;
             GameObject camGo;
             if (cam == null)
@@ -123,28 +88,19 @@ namespace BasketballGame
             shooter.shootCamera = cam;
             shooter.ballPrefab = BuildBallPrefab();
 
-            // ============================================================
-            // 7. 布料生成器
-            // ============================================================
             var clothSpawnerGo = new GameObject("ClothSpawner");
             var clothSpawner = clothSpawnerGo.AddComponent<BasketballClothSpawner>();
             clothSpawner.clothPrefab = BuildClothPrefab();
 
-            // ============================================================
-            // 8. HUD
-            // ============================================================
             var hudGo = new GameObject("HUD");
             var hud = hudGo.AddComponent<BasketballHUD>();
             hud.shooter = shooter;
         }
 
-        // -----------------------------
-        // 球 Prefab（代码生成，非 Asset Prefab）
-        // -----------------------------
         private GameObject BuildBallPrefab()
         {
             var go = new GameObject("BallPrefab_Template");
-            go.SetActive(false); // 模板不激活，Instantiate后才激活
+            go.SetActive(false);
             var spawner = go.AddComponent<SoftBodyRuntimeSpawner>();
             spawner.shape = SoftBodyRuntimeSpawner.SoftBodyShape.Sphere;
             spawner.sizeX = ballRadius * 2f;
@@ -152,7 +108,7 @@ namespace BasketballGame
             spawner.sizeZ = ballRadius * 2f;
             spawner.resolution = ballResolution;
             spawner.projectToSphereSurface = true;
-            spawner.meshOrigin = new Vector3(-ballRadius, -ballRadius, -ballRadius); // 让生成的球中心在本地(0,0,0)
+            spawner.meshOrigin = new Vector3(-ballRadius, -ballRadius, -ballRadius);
             spawner.softBodyMaterial = ballMaterial;
 
             spawner.numSubSteps = 10; // 子步更多，跨体碰撞更稳定
@@ -174,9 +130,6 @@ namespace BasketballGame
             return go;
         }
 
-        // -----------------------------
-        // 布料 Prefab
-        // -----------------------------
         private GameObject BuildClothPrefab()
         {
             var go = new GameObject("ClothPrefab_Template");
@@ -209,20 +162,17 @@ namespace BasketballGame
             spawner.fixedVertices = new List<int>
             {
                 0,                            // (0, 0)
-                cols - 1,                     // (0, subdivision)
+                cols - 1,
                 (rows - 1) * cols,            // (segments, 0)
-                (rows - 1) * cols + (cols - 1)// (segments, subdivision)
+                (rows - 1) * cols + (cols - 1)
             };
 
             go.AddComponent<BasketballClothTarget>();
-            go.AddComponent<DoubleSidedMeshPatcher>(); // 让布料双面可见，不依赖 shader
+            go.AddComponent<DoubleSidedMeshPatcher>();
             go.transform.SetParent(transform, false);
             return go;
         }
 
-        // -----------------------------
-        // 让材质强制双面渲染（兼容 URP Lit / Built-in Standard / HDRP）
-        // -----------------------------
         private static void MakeMaterialDoubleSided(Material mat)
         {
             if (mat == null) return;
@@ -236,9 +186,6 @@ namespace BasketballGame
             {
                 mat.SetFloat("_CullMode", 0f);
             }
-            // Built-in Standard: 没有 _Cull 属性，Standard shader 无法运行时切双面；
-            // 退路：Renderer.material 用 Unlit Color 的双面 shader（此处不改 shader，保留光照）
-            // 对 URP 而言，上述两个属性已足够。
         }
     }
 }

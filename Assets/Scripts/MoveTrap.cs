@@ -1,4 +1,4 @@
-using DG.Tweening;
+﻿using DG.Tweening;
 using UnityEngine;
 
 public class MoveTrap : MonoBehaviour
@@ -10,7 +10,6 @@ public class MoveTrap : MonoBehaviour
     public float delay;
     public Ease ease;
 
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
     {
         Sequence seq = DOTween.Sequence();//

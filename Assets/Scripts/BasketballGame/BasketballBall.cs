@@ -1,17 +1,9 @@
-using Unity.Entities;
+﻿using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
 
 namespace BasketballGame
 {
-    /// <summary>
-    /// 投篮用的"球"对象。挂在球 Prefab 上，伴随 SoftBodyRuntimeSpawner 使用。
-    ///
-    /// 职责：
-    /// 1. 等待 SoftBodyRuntimeSpawner 把 Entity 创建完后，设置初始速度
-    /// 2. 每帧读取 ECS 侧粒子位置，计算球质心（用作进球判定、越界检测）
-    /// 3. 生命周期：掉到地面下 / 静止过久 / 超时 -> 自毁
-    /// </summary>
     [RequireComponent(typeof(SoftBodyRuntimeSpawner))]
     public class BasketballBall : MonoBehaviour
     {
@@ -39,10 +31,6 @@ namespace BasketballGame
             }
         }
 
-        /// <summary>
-        /// 由 Shooter 在 Instantiate 后立刻调用，稍后在 LateUpdate 中应用
-        /// （因为 Entity 是在 SoftBodyRuntimeSpawner.Start 中创建的）
-        /// </summary>
         public void SetInitialVelocity(Vector3 velocity)
         {
             _initialVelocity = velocity;
@@ -85,9 +73,6 @@ namespace BasketballGame
 
             if (posBuf.Length == 0) return false;
 
-            // 1. 先把粒子整体平移到 transform.position（因为 Spawner 是以 meshOrigin 生成顶点，默认位于世界原点附近）
-            //    SpawnPos 已经包含在 transform.position 中
-            //    我们假设 Spawner 生成的球中心在局部坐标 meshOrigin + size/2 处；这里直接把所有粒子再加 transform.position
             float3 offset = transform.position;
             for (int i = 0; i < posBuf.Length; i++)
             {
@@ -131,10 +116,6 @@ namespace BasketballGame
             Center = (Vector3)(sum / posBuf.Length);
         }
 
-        /// <summary>
-        /// 通过 ManagedMeshReference 反查当前 GameObject 所对应的 Entity。
-        /// SoftBodyRuntimeSpawner 会把 gameObject.GetComponent<MeshFilter>() 存到 ManagedMeshReference 上。
-        /// </summary>
         private Entity _cachedEntity = Entity.Null;
         private Entity FindEntityBySelf()
         {

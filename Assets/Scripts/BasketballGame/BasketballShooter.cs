@@ -1,17 +1,9 @@
-using Unity.Entities;
+﻿using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
 
 namespace BasketballGame
 {
-    /// <summary>
-    /// 投篮输入控制 + 蓄力条 + 出手
-    /// 
-    /// 交互流程：
-    /// 1. 按下鼠标左键 -> 进入蓄力状态，蓄力值 0→1→0 来回震荡（速度条式）
-    /// 2. 松开鼠标左键 -> 按瞬时蓄力值投出一颗球
-    /// 3. 出手方向 = 相机 forward 绕 cameraRight 向上抬起 pitchBoostDegree 度
-    /// </summary>
     public class BasketballShooter : MonoBehaviour
     {
         [Header("引用")]
@@ -26,12 +18,8 @@ namespace BasketballGame
         [Header("蓄力")]
         [Range(0.2f, 3f)] public float cycleDuration = 1.2f;
 
-        // -----------------------------
-        // 运行时状态
-        // -----------------------------
         private bool _charging;
         private float _chargeTimer;
-        /// <summary>当前蓄力值（0~1），为蓄力条的显示值</summary>
         public float CurrentPower { get; private set; }
         public bool IsCharging => _charging;
 
@@ -72,7 +60,6 @@ namespace BasketballGame
             }
         }
 
-        /// <summary>按蓄力比例投出一个球</summary>
         public void Shoot(float power01)
         {
             if (ballPrefab == null)

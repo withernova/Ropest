@@ -1,13 +1,8 @@
-using Unity.Collections;
+﻿using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
 
-/// <summary>
-/// XPBD碰撞检测工具类 - 提供静态方法供碰撞系统调用
-/// 使用传统UnityEngine.Physics API进行碰撞查询（兼容场景中的传统Collider）
-/// 仅处理与场景物体的碰撞，自碰撞由Burst Job在SubStep内处理
-/// </summary>
 public static class XPBDCollisionHelper
 {
     // 碰撞辅助GameObject（懒初始化）
@@ -32,9 +27,6 @@ public static class XPBDCollisionHelper
         _sphereCollider.enabled = false;
     }
 
-    /// <summary>
-    /// Rope场景碰撞检测 - 对每对相邻粒子使用CapsuleCollider + Physics.ComputePenetration
-    /// </summary>
     public static void HandleRopeCollision(NativeArray<float3> posArr, NativeArray<float3> prevArr,
         int numPoints, float radius)
     {
@@ -90,10 +82,6 @@ public static class XPBDCollisionHelper
         }
     }
 
-    /// <summary>
-    /// Cloth场景碰撞检测 - 对每个粒子使用SphereCollider + Physics.ComputePenetration
-    /// 与老方案ClothXPBDSolver.PostSolve保持一致的碰撞策略
-    /// </summary>
     public static void HandleClothCollision(NativeArray<float3> posArr, NativeArray<float3> prevArr,
         NativeArray<float3> velArr, NativeArray<float> invMassArr, int numParticles, float collisionRadius, float friction, float dt)
     {
@@ -207,11 +195,6 @@ public static class XPBDCollisionHelper
     }
 }
 
-/// <summary>
-/// XPBD碰撞检测系统 - PostSolve后做一次场景碰撞修正
-/// Rope：仍使用Unity Physics API（CapsuleCollider + ComputePenetration）
-/// Cloth：已迁移到SubStep内的解析碰撞（ClothAnalyticalCollisionJob），此处不再处理
-/// </summary>
 [UpdateInGroup(typeof(FixedStepSimulationSystemGroup))]
 [UpdateAfter(typeof(RopeSimulationSystem))]
 [UpdateAfter(typeof(ClothSimulationSystem))]
@@ -237,13 +220,6 @@ public partial class XPBDCollisionSystem : SystemBase
 
     protected override void OnUpdate()
     {
-        // Rope 场景碰撞已迁移到 RopeSimulationSystem 的 SubStep 内（RopeAnalyticalCollisionJob），此处不再处理。
-        // 旧路径使用 CapsuleCollider + Physics.ComputePenetration：
-        //   1) Dependency.Complete() 不能等待 ISystem 的 state.Dependency，存在数据竞争 → 抽搐；
-        //   2) ComputePenetration 返回的位移会同时作用于胶囊两端粒子，导致相邻段叠加修正 → 闪现；
-        //   3) 在所有 SubStep 完成后才处理，碰撞修正破坏绳长，下一帧 Edge 再弹回 → 抖动。
-        // 因此这里禁用对 Rope 的处理，统一改走解析碰撞。
-
         // Cloth场景碰撞已迁移到ClothSimulationSystem的SubStep内（ClothAnalyticalCollisionJob）
     }
 }

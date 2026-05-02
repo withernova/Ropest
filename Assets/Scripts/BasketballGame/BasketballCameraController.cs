@@ -1,13 +1,7 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 namespace BasketballGame
 {
-    /// <summary>
-    /// 第一人称相机控制（FPS锁鼠标模式）
-    /// - 游戏启动即锁光标、隐藏光标
-    /// - 鼠标 X 控制 Yaw（绕 Y 轴），鼠标 Y 控制 Pitch（绕右轴，限制 [-80°, 80°]）
-    /// - 按 Esc 释放光标（方便开发调试）
-    /// </summary>
     [RequireComponent(typeof(Camera))]
     public class BasketballCameraController : MonoBehaviour
     {

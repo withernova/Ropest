@@ -1,14 +1,10 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
 
-/// <summary>
-/// Rope Authoring组件 - 挂载到GameObject上，Baker会将其转换为ECS Entity
-/// 替代原有的Rope MonoBehaviour
-/// </summary>
 public class RopeAuthoring : MonoBehaviour
 {
     [Header("环境参数")]
@@ -197,7 +193,7 @@ public class RopeAuthoring : MonoBehaviour
 
             Mesh mesh = new Mesh();
             mesh.name = "Rope_DOTS";
-            mesh.MarkDynamic(); // 每帧更新顶点，标记为Dynamic VBO
+            mesh.MarkDynamic();
             List<Vector3> vertices = new List<Vector3>();
             List<int> triangles = new List<int>();
             List<Vector2> uvs = new List<Vector2>();

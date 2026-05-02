@@ -1,4 +1,4 @@
-using System.Collections;
+锘縰sing System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -15,7 +15,7 @@ public class ObjectPool : MonoBehaviour
 
         if (null == template)
         {
-            Debug.LogError("这里怎么给了个空资源呢？？");
+            Debug.LogError("锟斤拷锟斤拷锟斤拷么锟斤拷锟剿革拷锟斤拷锟斤拷源锟截ｏ拷锟斤拷");
             return;
         }
 

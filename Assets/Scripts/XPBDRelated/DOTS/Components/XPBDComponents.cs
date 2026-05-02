@@ -1,107 +1,68 @@
-using Unity.Entities;
+﻿using Unity.Entities;
 using Unity.Mathematics;
 
-// ============================================================
-// 粒子数据 Buffers
-// ============================================================
 
-/// <summary>
-/// 粒子位置（Rope用pointPos，Cloth用pos）
-/// </summary>
 [InternalBufferCapacity(0)]
 public struct ParticlePosition : IBufferElementData
 {
     public float3 Value;
 }
 
-/// <summary>
-/// 粒子前一帧位置
-/// </summary>
 [InternalBufferCapacity(0)]
 public struct ParticlePrevPosition : IBufferElementData
 {
     public float3 Value;
 }
 
-/// <summary>
-/// 粒子速度
-/// </summary>
 [InternalBufferCapacity(0)]
 public struct ParticleVelocity : IBufferElementData
 {
     public float3 Value;
 }
 
-/// <summary>
-/// 粒子逆质量
-/// </summary>
 [InternalBufferCapacity(0)]
 public struct ParticleInvMass : IBufferElementData
 {
     public float Value;
 }
 
-// ============================================================
-// Rope 专用 Buffers
-// ============================================================
 
-/// <summary>
-/// Rope的Ghost点位置
-/// </summary>
 [InternalBufferCapacity(0)]
 public struct GhostPosition : IBufferElementData
 {
     public float3 Value;
 }
 
-/// <summary>
-/// Rope的Ghost点前一帧位置
-/// </summary>
 [InternalBufferCapacity(0)]
 public struct GhostPrevPosition : IBufferElementData
 {
     public float3 Value;
 }
 
-/// <summary>
-/// Rope的Ghost点速度
-/// </summary>
 [InternalBufferCapacity(0)]
 public struct GhostVelocity : IBufferElementData
 {
     public float3 Value;
 }
 
-/// <summary>
-/// Rope的Ghost点逆质量
-/// </summary>
 [InternalBufferCapacity(0)]
 public struct GhostInvMass : IBufferElementData
 {
     public float Value;
 }
 
-/// <summary>
-/// Rope各段的静止长度
-/// </summary>
 [InternalBufferCapacity(0)]
 public struct RopeRestLength : IBufferElementData
 {
     public float Value;
 }
 
-/// <summary>
-/// Rope的初始Darboux向量（BendingAndTwisting约束用）
-/// </summary>
 [InternalBufferCapacity(0)]
 public struct InitDarbouxVector : IBufferElementData
 {
     public float3 Value;
 }
 
-// ============================================================
-// Rope EdgeConstraint Lambda Buffers
-// ============================================================
 
 [InternalBufferCapacity(0)]
 public struct EdgeLambda0 : IBufferElementData
@@ -121,9 +82,6 @@ public struct EdgeLambda2 : IBufferElementData
     public float Value;
 }
 
-// ============================================================
-// Rope BendTwist Lambda Buffer
-// ============================================================
 
 [InternalBufferCapacity(0)]
 public struct BendTwistLambda : IBufferElementData
@@ -131,33 +89,26 @@ public struct BendTwistLambda : IBufferElementData
     public float3 Value;
 }
 
-// ============================================================
-// Cloth 专用 Buffers
-// ============================================================
 
-/// <summary>
-/// Cloth距离约束的边数据
-/// </summary>
+// ============================================================================
+// XPBD 共享 Buffer 组件（布料与软体共用）
+// 说明：原 ClothEdge / SoftBodyEdge 字段完全一致，合并为 XPBDEdge；
+//       原 ClothDistanceLambda / SoftBodyDistanceLambda 同理合并为 XPBDDistanceLambda。
+// ============================================================================
 [InternalBufferCapacity(0)]
-public struct ClothEdge : IBufferElementData
+public struct XPBDEdge : IBufferElementData
 {
     public int IndexA;
     public int IndexB;
     public float RestLength;
 }
 
-/// <summary>
-/// Cloth距离约束的Lambda
-/// </summary>
 [InternalBufferCapacity(0)]
-public struct ClothDistanceLambda : IBufferElementData
+public struct XPBDDistanceLambda : IBufferElementData
 {
     public float Value;
 }
 
-/// <summary>
-/// 三角形索引数据
-/// </summary>
 [InternalBufferCapacity(0)]
 public struct TriangleIndex : IBufferElementData
 {
@@ -166,22 +117,13 @@ public struct TriangleIndex : IBufferElementData
     public int I2;
 }
 
-// ============================================================
-// Rope 截面映射 Buffer（用于渲染：截面索引 -> 顶点索引）
-// ============================================================
 
-/// <summary>
-/// 截面中的顶点索引（扁平化存储，每subdivision个为一组）
-/// </summary>
 [InternalBufferCapacity(0)]
 public struct SectionVertexIndex : IBufferElementData
 {
     public int Value;
 }
 
-// ============================================================
-// Mesh顶点Buffer（用于渲染回写）
-// ============================================================
 
 [InternalBufferCapacity(0)]
 public struct MeshVertex : IBufferElementData
@@ -189,17 +131,11 @@ public struct MeshVertex : IBufferElementData
     public float3 Value;
 }
 
-// ============================================================
-// 配置组件
-// ============================================================
 
-/// <summary>
-/// Rope求解器配置
-/// </summary>
 public struct RopeSolverConfig : IComponentData
 {
-    public int NumPoints;          // pointPos数量
-    public int NumGhostPoints;     // ghostPos数量
+    public int NumPoints;
+    public int NumGhostPoints;
     public int Segments;
     public int Subdivision;
     public int NumSubSteps;
@@ -207,124 +143,84 @@ public struct RopeSolverConfig : IComponentData
     public float GhostDistance;
     public float GravityFactor;
     public float3 Gravity;
-    public float EdgeStiffness;        // EdgeConstraint的compliance (α)，原版默认0.0001
-    public float BendTwistStiffness;   // BendingAndTwistingConstraint的compliance (α)，原版默认0.6
-    public float BendTwistKs;          // BendingAndTwistingConstraint的ks（刚度缩放系数），原版默认0.8
-    public float Damping;              // 速度阻尼系数
-    public float Friction;             // 碰撞摩擦系数（0~1），0=无摩擦，推荐 0.2~0.5
+    public float EdgeStiffness;
+    public float BendTwistStiffness;
+    public float BendTwistKs;
+    public float Damping;
+    public float Friction;
 }
 
-/// <summary>
-/// Cloth求解器配置
-/// </summary>
-public struct ClothSolverConfig : IComponentData
+// ============================================================================
+// XPBD 基础共享配置（布料/软体共用字段）
+// DOTS 的 IComponentData 为 struct 无法继承，这里通过"组合"让两种配置内嵌同一个
+// XPBDBaseConfig，公共流水线 Job（PreSolve/PostSolve/DistanceConstraint/AnalyticalCollision）
+// 只读取 Base 部分即可，专属字段（如 Subdivision / VolumeStiffness）各自保留。
+// ============================================================================
+public struct XPBDBaseConfig
 {
     public int NumParticles;
-    public int Subdivision;
     public int NumSubSteps;
     public float3 Gravity;
     public float DistanceStiffness;
-    public float Damping;           // 速度阻尼系数（0~1，越大阻尼越强，推荐0.01~0.05）
-    public float CollisionRadius;   // 碰撞检测半径（安全边距）
-    public float Friction;          // 碰撞摩擦系数（0~1，推荐0.3~0.6）
-    // 运行时开关：设为 true 时本帧跳过与场景解析碰撞体（地板/Box/球体）的碰撞
-    // 用于"布料升起/落下"等非交互阶段，避免布料穿过地面产生被压扁的怪异网格
-    public bool SkipAnalyticalCollision;
-    // 运行时开关：设为 true 时本帧跳过与其他 Body（软体球等）的跨体碰撞
-    public bool SkipCrossBodyCollision;
+    public float Damping;
+    public float CollisionRadius;
+    public float Friction;
 }
 
-/// <summary>
-/// 标记需要更新Mesh的Entity
-/// </summary>
+public struct ClothSolverConfig : IComponentData
+{
+    public XPBDBaseConfig Base;
+    public int Subdivision;
+    public bool SkipAnalyticalCollision;
+    public bool SkipCrossBodyCollision;
+
+    // === 向后兼容字段（旧代码 cfg.NumParticles / cfg.Gravity 等写法依然可用） ===
+    public int NumParticles { get => Base.NumParticles; set => Base.NumParticles = value; }
+    public int NumSubSteps { get => Base.NumSubSteps; set => Base.NumSubSteps = value; }
+    public float3 Gravity { get => Base.Gravity; set => Base.Gravity = value; }
+    public float DistanceStiffness { get => Base.DistanceStiffness; set => Base.DistanceStiffness = value; }
+    public float Damping { get => Base.Damping; set => Base.Damping = value; }
+    public float CollisionRadius { get => Base.CollisionRadius; set => Base.CollisionRadius = value; }
+    public float Friction { get => Base.Friction; set => Base.Friction = value; }
+}
+
 public struct MeshUpdateTag : IComponentData { }
-
-/// <summary>
-/// 标记Rope Entity
-/// </summary>
 public struct RopeTag : IComponentData { }
-
-/// <summary>
-/// 标记Cloth Entity
-/// </summary>
 public struct ClothTag : IComponentData { }
 
-// ============================================================
-// 解析碰撞体数据（用于替代Unity Physics的碰撞检测）
-// 支持球体和Box，可Burst化
-// ============================================================
-
-/// <summary>
-/// 碰撞体类型枚举
-/// </summary>
 public enum AnalyticalColliderType
 {
     Sphere = 0,
     Box = 1
 }
 
-/// <summary>
-/// 解析碰撞体数据（blittable，可在NativeArray中使用）
-/// 球体：Center + Radius
-/// Box：Center + HalfExtents + InverseRotation（用于将点变换到Box局部空间）
-/// </summary>
 public struct AnalyticalColliderData
 {
     public AnalyticalColliderType Type;
     public float3 Center;
-    public float Radius;            // 球体半径
-    public float3 HalfExtents;      // Box半尺寸
-    public quaternion Rotation;     // Box旋转
-    public quaternion InvRotation;  // Box逆旋转（用于将世界坐标变换到局部坐标）
+    public float Radius;
+    public float3 HalfExtents;
+    public quaternion Rotation;
+    public quaternion InvRotation;
 }
 
-// ============================================================
-// SoftBody（可变形软体）专用 Buffers 和 Components
-// ============================================================
-
-/// <summary>
-/// 标记SoftBody Entity
-/// </summary>
 public struct SoftBodyTag : IComponentData { }
 
-/// <summary>
-/// SoftBody求解器配置
-/// </summary>
 public struct SoftBodySolverConfig : IComponentData
 {
-    public int NumParticles;        // 粒子（顶点）数量
-    public int NumSubSteps;         // 子步迭代次数
-    public float3 Gravity;          // 重力
-    public float DistanceStiffness; // 距离约束柔度（compliance），0=刚性
-    public float VolumeStiffness;   // 体积约束柔度（compliance），0=不可压缩
-    public float Damping;           // 速度阻尼系数（0~1）
-    public float CollisionRadius;   // 碰撞检测半径
-    public float Friction;          // 碰撞摩擦系数
+    public XPBDBaseConfig Base;
+    public float VolumeStiffness;
+
+    // === 向后兼容字段 ===
+    public int NumParticles { get => Base.NumParticles; set => Base.NumParticles = value; }
+    public int NumSubSteps { get => Base.NumSubSteps; set => Base.NumSubSteps = value; }
+    public float3 Gravity { get => Base.Gravity; set => Base.Gravity = value; }
+    public float DistanceStiffness { get => Base.DistanceStiffness; set => Base.DistanceStiffness = value; }
+    public float Damping { get => Base.Damping; set => Base.Damping = value; }
+    public float CollisionRadius { get => Base.CollisionRadius; set => Base.CollisionRadius = value; }
+    public float Friction { get => Base.Friction; set => Base.Friction = value; }
 }
 
-/// <summary>
-/// SoftBody距离约束的边数据
-/// </summary>
-[InternalBufferCapacity(0)]
-public struct SoftBodyEdge : IBufferElementData
-{
-    public int IndexA;
-    public int IndexB;
-    public float RestLength;
-}
-
-/// <summary>
-/// SoftBody距离约束的Lambda
-/// </summary>
-[InternalBufferCapacity(0)]
-public struct SoftBodyDistanceLambda : IBufferElementData
-{
-    public float Value;
-}
-
-/// <summary>
-/// 四面体索引数据（4个顶点索引）
-/// </summary>
 [InternalBufferCapacity(0)]
 public struct Tetrahedron : IBufferElementData
 {
@@ -334,27 +230,18 @@ public struct Tetrahedron : IBufferElementData
     public int I3;
 }
 
-/// <summary>
-/// 四面体静止体积
-/// </summary>
 [InternalBufferCapacity(0)]
 public struct TetrahedronRestVolume : IBufferElementData
 {
     public float Value;
 }
 
-/// <summary>
-/// 四面体体积约束的Lambda
-/// </summary>
 [InternalBufferCapacity(0)]
 public struct TetrahedronVolumeLambda : IBufferElementData
 {
     public float Value;
 }
 
-/// <summary>
-/// 表面三角形索引（用于渲染）
-/// </summary>
 [InternalBufferCapacity(0)]
 public struct SurfaceTriangleIndex : IBufferElementData
 {
@@ -363,35 +250,19 @@ public struct SurfaceTriangleIndex : IBufferElementData
     public int I2;
 }
 
-// ============================================================
-// 渲染网格绑定数据（模拟网格 -> 高面数渲染网格的重心坐标插值）
-// ============================================================
-
-/// <summary>
-/// 渲染顶点的重心坐标绑定数据
-/// 每个渲染顶点绑定到一个模拟三角形上，通过重心坐标插值得到位置
-/// </summary>
 [InternalBufferCapacity(0)]
 public struct RenderVertexBinding : IBufferElementData
 {
-    /// <summary>模拟三角形的三个顶点索引（对应ParticlePosition中的索引）</summary>
     public int SimI0;
     public int SimI1;
     public int SimI2;
-
-    /// <summary>重心坐标权重 (u, v, w)，满足 u + v + w = 1</summary>
     public float U;
     public float V;
     public float W;
 }
 
-/// <summary>
-/// 渲染网格配置（存储渲染顶点数量等信息）
-/// </summary>
 public struct RenderMeshConfig : IComponentData
 {
-    /// <summary>渲染网格顶点数量</summary>
     public int NumRenderVertices;
-    /// <summary>是否启用高面数渲染（false则直接用模拟网格渲染）</summary>
     public bool UseSubdivision;
 }

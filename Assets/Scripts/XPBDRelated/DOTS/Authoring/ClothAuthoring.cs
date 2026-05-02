@@ -1,14 +1,10 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
 
-/// <summary>
-/// Cloth Authoring组件 - 挂载到GameObject上，Baker会将其转换为ECS Entity
-/// 替代原有的Cloth MonoBehaviour
-/// </summary>
 public class ClothAuthoring : MonoBehaviour
 {
     [Header("环境参数")]
@@ -120,18 +116,18 @@ public class ClothAuthoring : MonoBehaviour
             }
 
             // 边数据
-            var edgeBuf = AddBuffer<ClothEdge>(entity);
-            var lambdaBuf = AddBuffer<ClothDistanceLambda>(entity);
+            var edgeBuf = AddBuffer<XPBDEdge>(entity);
+            var lambdaBuf = AddBuffer<XPBDDistanceLambda>(entity);
 
             foreach (var kvp in edgeDict)
             {
-                edgeBuf.Add(new ClothEdge
+                edgeBuf.Add(new XPBDEdge
                 {
                     IndexA = kvp.Key.Item1,
                     IndexB = kvp.Key.Item2,
                     RestLength = kvp.Value
                 });
-                lambdaBuf.Add(new ClothDistanceLambda { Value = 0f });
+                lambdaBuf.Add(new XPBDDistanceLambda { Value = 0f });
             }
 
             // 三角形索引
@@ -172,7 +168,7 @@ public class ClothAuthoring : MonoBehaviour
 
             Mesh mesh = new Mesh();
             mesh.name = "Cloth_DOTS";
-            mesh.MarkDynamic(); // 每帧更新顶点，标记为Dynamic VBO
+            mesh.MarkDynamic();
             List<Vector3> vertices = new List<Vector3>();
             List<int> triangles = new List<int>();
             List<Vector2> uvs = new List<Vector2>();

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,7 +22,6 @@ public class Rope : MonoBehaviour
     public Vector3 meshOrigin;
     public Material ropeMaterial;
     
-    // Solver
     public RopeXPBDSolver solver;
 
     [Header("游戏对象")]
@@ -50,7 +49,6 @@ public class Rope : MonoBehaviour
         GetComponent<MeshRenderer>().material = ropeMaterial;
     }
 
-    // 处理动作和更新mesh
     public void Update()
     {
         if (!ready)
@@ -59,25 +57,11 @@ public class Rope : MonoBehaviour
         UpdateMesh();
     }
 
-    // 计算和模拟
     public void FixedUpdate()
     {
         if (!simulate || !ready)
             return;
         controlPoint.transform.localPosition = solver.pointPos[solver.ctrlIndex];
-        // for (var index = 0; index < solver.pointPos.Length; index++)
-        // {
-        //     solver.direcN[index] = Vector3.zero;
-        //     var localVertex = solver.pointPos[index];
-        //     Vector3 worldVertex = transform.TransformPoint(localVertex);
-        //     foreach (var collider in Physics.OverlapSphere(worldVertex, 0.05f))
-        //     {
-        //         if (collider.gameObject == gameObject || collider.isTrigger) continue;
-        //
-        //         Physics.Raycast(worldVertex, collider.ClosestPoint(worldVertex) - worldVertex, out RaycastHit info);
-        //         solver.direcN[index] += info.normal;
-        //     }
-        // }
         solver.Simulate(Time.fixedDeltaTime);
         
     }
@@ -90,7 +74,6 @@ public class Rope : MonoBehaviour
         List<int> triangles = new List<int>();
         List<Vector2> uvs = new List<Vector2>();
 
-        // 顶点
         for (int i = 0; i < seg + 1; i++)
         {
             Vector3 point = initPos + (len / seg) * new Vector3(i, 0, 0);
@@ -109,7 +92,6 @@ public class Rope : MonoBehaviour
                 vertices.Add(point);
         }
 
-        // 索引
         for (int i = 0; i < seg; i++)
         {
             if (i == 0)
@@ -143,7 +125,6 @@ public class Rope : MonoBehaviour
         }
 
 
-        // uv
         uvs.Add(new Vector2(0, 0));
         for (int i = 0; i <= seg; i++)
         {

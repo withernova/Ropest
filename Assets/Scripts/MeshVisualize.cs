@@ -1,4 +1,4 @@
-using System.Collections;
+ï»¿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -6,12 +6,12 @@ public class MeshVisualize : MonoBehaviour
 {
     private XPBDSolver solver;
     private Rope ropeComponent;
-    private Color[] triangleColors; // ´æ´¢Ã¿¸öÈý½ÇÐÎµÄÑÕÉ«
+    private Color[] triangleColors; // ï¿½æ´¢Ã¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îµï¿½ï¿½ï¿½É«
 
     public float lineWidth = 0.01f;
     public bool showTriangles = true;
     public bool showEdges = true;
-    public float alpha = 0.6f; // Í¸Ã÷¶È¿ØÖÆ
+    public float alpha = 0.6f; // Í¸ï¿½ï¿½ï¿½È¿ï¿½ï¿½ï¿½
 
     void Start()
     {
@@ -36,10 +36,10 @@ public class MeshVisualize : MonoBehaviour
         triangleColors = new Color[solver.triangles.Length];
         for (int i = 0; i < solver.triangles.Length; i++)
         {
-            // Ê¹ÓÃHSVÑÕÉ«¿Õ¼äÉú³É¸ü¾ùÔÈµÄÑÕÉ«·Ö²¼
-            float hue = (float)i / solver.triangles.Length; // 0µ½1Ö®¼äµÄÖµ
+            // Ê¹ï¿½ï¿½HSVï¿½ï¿½É«ï¿½Õ¼ï¿½ï¿½ï¿½ï¿½É¸ï¿½ï¿½ï¿½ï¿½Èµï¿½ï¿½ï¿½É«ï¿½Ö²ï¿½
+            float hue = (float)i / solver.triangles.Length; // 0ï¿½ï¿½1Ö®ï¿½ï¿½ï¿½Öµ
             triangleColors[i] = Color.HSVToRGB(hue, 0.8f, 0.8f);
-            triangleColors[i].a = alpha; // ÉèÖÃÍ¸Ã÷¶È
+            triangleColors[i].a = alpha; // ï¿½ï¿½ï¿½ï¿½Í¸ï¿½ï¿½ï¿½ï¿½
         }
     }
 
@@ -56,11 +56,11 @@ public class MeshVisualize : MonoBehaviour
             Vector3 p2 = transform.TransformPoint(solver.pos[triangle.pointsId[1]]);
             Vector3 p3 = transform.TransformPoint(solver.pos[triangle.pointsId[2]]);
 
-            // Ê¹ÓÃDebug.DrawLine»æÖÆÈý½ÇÐÎ±ßÔµ
+            // Ê¹ï¿½ï¿½Debug.DrawLineï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î±ï¿½Ôµ
             if (showEdges)
             {
                 Color edgeColor = triangleColors[i];
-                edgeColor.a = 1f; // ±ßÔµÊ¹ÓÃ²»Í¸Ã÷É«
+                edgeColor.a = 1f; // ï¿½ï¿½ÔµÊ¹ï¿½Ã²ï¿½Í¸ï¿½ï¿½É«
 
                 string edgeKey = GetEdgeKey(p1, p2);
                 if (!drawnEdges.Contains(edgeKey))
@@ -109,7 +109,7 @@ public class MeshVisualize : MonoBehaviour
             if (showEdges)
             {
                 Color edgeColor = triangleColors[i];
-                edgeColor.a = 1f; // ±ßÔµÊ¹ÓÃ²»Í¸Ã÷É«
+                edgeColor.a = 1f; // ï¿½ï¿½ÔµÊ¹ï¿½Ã²ï¿½Í¸ï¿½ï¿½É«
                 Gizmos.color = edgeColor;
 
                 DrawEdgeIfNotDrawn(p1, p2, drawnEdges);
@@ -138,23 +138,23 @@ public class MeshVisualize : MonoBehaviour
 
     private void DrawTriangleFace(Vector3 p1, Vector3 p2, Vector3 p3)
     {
-        // »æÖÆÈý½ÇÐÎÃæ
+        // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
         Vector3 center = (p1 + p2 + p3) / 3f;
         Vector3[] vertices = new Vector3[] { p1, p2, p3 };
 
-        // »æÖÆ´ÓÖÐÐÄµ½¶¥µãµÄÏßÌõÀ´´´½¨Ìî³äÐ§¹û
+        // ï¿½ï¿½ï¿½Æ´ï¿½ï¿½ï¿½ï¿½Äµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð§ï¿½ï¿½
         for (int i = 0; i < 3; i++)
         {
             Gizmos.DrawLine(center, vertices[i]);
         }
 
-        // »æÖÆ±ß¿ò
+        // ï¿½ï¿½ï¿½Æ±ß¿ï¿½
         Gizmos.DrawLine(p1, p2);
         Gizmos.DrawLine(p2, p3);
         Gizmos.DrawLine(p3, p1);
     }
 
-    // Ìá¹©ÖØÐÂÉú³ÉÑÕÉ«µÄ·½·¨
+    // ï¿½á¹©ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½É«ï¿½Ä·ï¿½ï¿½ï¿½
     public void RegenerateColors()
     {
         InitializeTriangleColors();

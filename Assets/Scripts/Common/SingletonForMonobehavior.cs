@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -51,4 +51,3 @@ public class SingletonForMonoBehaviour<T> : MonoBehaviour where T : MonoBehaviou
         applicationIsQuitting = true;
     }
 }  
-

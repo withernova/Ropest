@@ -1,14 +1,10 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
 
-/// <summary>
-/// 运行时Rope初始化器 - 不依赖SubScene，可以在运行时动态创建Rope Entity
-/// 使用EntityArchetype一次性创建所有组件，避免多次结构性变更导致Buffer失效
-/// </summary>
 public class RopeRuntimeSpawner : MonoBehaviour
 {
     [Header("环境参数")]
@@ -144,7 +140,7 @@ public class RopeRuntimeSpawner : MonoBehaviour
             Friction = friction
         });
 
-        // === 填充Buffer数据（此时不会触发结构性变更，因为Buffer已经存在） ===
+        // 填充Buffer数据
         float ctrlMass = 0.3f;
         float invMassValue = 1f;
 
@@ -216,7 +212,7 @@ public class RopeRuntimeSpawner : MonoBehaviour
             }
         }
 
-        // 托管Mesh引用（这是唯一的结构性变更，但在所有Buffer填充完毕后执行）
+        // 托管Mesh引用
         entityManager.AddComponentObject(ropeEntity, new ManagedMeshReference
         {
             Mesh = ropeMesh,
@@ -241,7 +237,7 @@ public class RopeRuntimeSpawner : MonoBehaviour
     {
         Mesh mesh = new Mesh();
         mesh.name = "Rope_DOTS_Runtime";
-        mesh.MarkDynamic(); // 每帧更新顶点，标记为Dynamic VBO
+        mesh.MarkDynamic();
         List<Vector3> vertices = new List<Vector3>();
         List<int> triangles = new List<int>();
         List<Vector2> uvs = new List<Vector2>();

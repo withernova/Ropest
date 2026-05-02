@@ -1,19 +1,9 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
 
-/// <summary>
-/// 运行时SoftBody初始化器 - 不依赖SubScene，可以在运行时动态创建SoftBody Entity
-/// 支持两种模式：
-/// 1. 自动生成立方体软体（通过分辨率参数控制）
-/// 2. 使用外部Mesh（需要提供四面体数据或自动进行简单四面体化）
-/// 
-/// 使用方式：
-/// 1. 创建空GameObject，挂载此脚本
-/// 2. 设置参数后运行，自动创建软体Entity
-/// </summary>
 public class SoftBodyRuntimeSpawner : MonoBehaviour
 {
     [Header("环境参数")]
@@ -199,7 +189,6 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
             restLengths[e2] = Vector3.Distance(vertices[a], vertices[b]);
         }
 
-        // === 使用Archetype一次性创建Entity ===
         var componentTypes = new List<ComponentType>
         {
             typeof(SoftBodyTag),
@@ -209,8 +198,8 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
             typeof(ParticlePrevPosition),
             typeof(ParticleVelocity),
             typeof(ParticleInvMass),
-            typeof(SoftBodyEdge),
-            typeof(SoftBodyDistanceLambda),
+            typeof(XPBDEdge),
+            typeof(XPBDDistanceLambda),
             typeof(Tetrahedron),
             typeof(TetrahedronRestVolume),
             typeof(TetrahedronVolumeLambda),
@@ -238,7 +227,6 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
             Friction = friction
         });
 
-        // === 填充Buffer数据 ===
         var posBuf = entityManager.GetBuffer<ParticlePosition>(softBodyEntity);
         var prevBuf = entityManager.GetBuffer<ParticlePrevPosition>(softBodyEntity);
         var velBuf = entityManager.GetBuffer<ParticleVelocity>(softBodyEntity);
@@ -254,18 +242,18 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
         }
 
         // 边数据
-        var edgeBuf = entityManager.GetBuffer<SoftBodyEdge>(softBodyEntity);
-        var distLambdaBuf = entityManager.GetBuffer<SoftBodyDistanceLambda>(softBodyEntity);
+        var edgeBuf = entityManager.GetBuffer<XPBDEdge>(softBodyEntity);
+        var distLambdaBuf = entityManager.GetBuffer<XPBDDistanceLambda>(softBodyEntity);
 
         for (int e2 = 0; e2 < numEdges; e2++)
         {
-            edgeBuf.Add(new SoftBodyEdge
+            edgeBuf.Add(new XPBDEdge
             {
                 IndexA = edges[e2 * 2],
                 IndexB = edges[e2 * 2 + 1],
                 RestLength = restLengths[e2]
             });
-            distLambdaBuf.Add(new SoftBodyDistanceLambda { Value = 0f });
+            distLambdaBuf.Add(new XPBDDistanceLambda { Value = 0f });
         }
 
         // 四面体数据
@@ -345,12 +333,6 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 生成球体（椭球）网格数据：顶点、四面体、表面三角形、边
-    /// 基于体素化思路：先构建 resolution^3 的立方网格，只保留其中心落在椭球内的小立方体，
-    /// 每个保留的小立方体被切分为 5 个四面体；随后把表面顶点投影到椭球面以获得圆滑外观。
-    /// 这样可以完整复用 Cuboid 模式的拓扑、边、体积、表面提取流程。
-    /// </summary>
     void GenerateSphereMeshData(out Vector3[] vertices, out int[] tetrahedra,
         out int[] surfaceTriangles, out int[] edgesOut)
     {
@@ -394,7 +376,7 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
             return (fx * fx + fy * fy + fz * fz) <= 1.0f + 1e-6f;
         }
 
-        var usedVertexMap = new Dictionary<int, int>(); // oldIdx -> newIdx
+        var usedVertexMap = new Dictionary<int, int>();
         var newVerts = new List<Vector3>();
         var tetList = new List<int>();
 
@@ -409,9 +391,6 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
             return newIdx;
         }
 
-        // 如果分辨率过低导致没有任何小立方体的中心落入椭球（极小 resolution 时可能发生），
-        // 则退化为保留所有 8 个角都在椭球内的立方体。若仍然没有，则至少保留 bbox 中心处的立方体。
-        // 这里直接用“中心在内”即可。
         bool anyKept = false;
         for (int ix = 0; ix < nx; ix++)
         {
@@ -556,7 +535,7 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
 
         surfaceTriangles = surfTriList.ToArray();
 
-        // 把表面顶点投影到椭球面（保持内部顶点不动，避免四面体退化）
+        // 把表面顶点投影到椭球面
         if (projectToSphereSurface)
         {
             foreach (int vi in surfaceVertexSet)
@@ -575,10 +554,6 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 生成立方体网格数据：顶点、四面体、表面三角形、边
-    /// 每个小立方体被分割为5个四面体
-    /// </summary>
     void GenerateCuboidMeshData(out Vector3[] vertices, out int[] tetrahedra,
         out int[] surfaceTriangles, out int[] edgesOut)
     {
@@ -615,13 +590,6 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
             {
                 for (int iz = 0; iz < nz; iz++)
                 {
-                    // 小立方体的8个顶点索引
-                    //    6----7
-                    //   /|   /|
-                    //  4----5 |
-                    //  | 2--|-3
-                    //  |/   |/
-                    //  0----1
                     int v0 = ix * (ny + 1) * (nz + 1) + iy * (nz + 1) + iz;
                     int v1 = (ix + 1) * (ny + 1) * (nz + 1) + iy * (nz + 1) + iz;
                     int v2 = ix * (ny + 1) * (nz + 1) + iy * (nz + 1) + (iz + 1);
@@ -683,10 +651,6 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
         }
         edgesOut = edgeList.ToArray();
 
-        // 提取表面三角形
-        // 表面三角形 = 只被一个四面体引用的三角形面
-        // 使用排序后的三元组作为key来统计面的引用次数
-        // 同时记录每个面所属四面体的对面顶点，用于后续修正法线方向
         var faceCount = new Dictionary<(int, int, int), int>();
         // 排序key -> (三角形三个顶点, 对面顶点索引)
         var faceInfo = new Dictionary<(int, int, int), (int, int, int, int)>();
@@ -770,10 +734,6 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 计算四面体有符号体积
-    /// V = dot(p1-p0, cross(p2-p0, p3-p0)) / 6
-    /// </summary>
     static float ComputeTetVolume(Vector3 p0, Vector3 p1, Vector3 p2, Vector3 p3)
     {
         Vector3 d1 = p1 - p0;
@@ -782,9 +742,6 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
         return Vector3.Dot(d1, Vector3.Cross(d2, d3)) / 6f;
     }
 
-    /// <summary>
-    /// 生成球面映射UV
-    /// </summary>
     Vector2[] GenerateSphereUVs(Vector3[] verts)
     {
         var uvs = new Vector2[verts.Length];
@@ -803,14 +760,11 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
         return uvs;
     }
 
-    /// <summary>
-    /// 从顶点、三角形、UV数据创建Mesh
-    /// </summary>
     Mesh CreateSurfaceMeshFromData(Vector3[] verts, int[] triangles, Vector2[] uvs)
     {
         Mesh mesh = new Mesh();
         mesh.name = "SoftBody_DOTS_Runtime";
-        mesh.MarkDynamic(); // 软体顶点每帧更新，使用Dynamic VBO避免GPU端重分配
+        mesh.MarkDynamic();
 
         // 如果顶点数超过65535，使用32位索引
         if (verts.Length > 65535)

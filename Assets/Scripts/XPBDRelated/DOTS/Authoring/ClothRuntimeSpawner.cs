@@ -1,13 +1,9 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 using UnityEngine;
 
-/// <summary>
-/// 运行时Cloth初始化器 - 不依赖SubScene，可以在运行时动态创建Cloth Entity
-/// 使用EntityArchetype一次性创建所有组件，避免多次结构性变更导致Buffer失效
-/// </summary>
 public class ClothRuntimeSpawner : MonoBehaviour
 {
     [Header("环境参数")]
@@ -83,7 +79,7 @@ public class ClothRuntimeSpawner : MonoBehaviour
         // 创建渲染Mesh
         clothMesh = new Mesh();
         clothMesh.name = "Cloth_DOTS_Runtime";
-        clothMesh.MarkDynamic(); // 每帧更新顶点，标记为Dynamic VBO
+        clothMesh.MarkDynamic();
         if (renderVertices.Length > 65535)
             clothMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
         clothMesh.SetVertices(renderVertices);
@@ -98,6 +94,10 @@ public class ClothRuntimeSpawner : MonoBehaviour
         var meshRenderer = gameObject.AddComponent<MeshRenderer>();
         meshFilter.mesh = clothMesh;
         meshRenderer.material = clothMaterial;
+        // 默认关闭渲染，避免"第一帧水平初始网格"闪现在相机前。
+        // BasketballClothTarget 会在 InitializeParticleLayout 完成、粒子被摆到起点
+        // 并刷新一次 mesh 后，再重新启用该 MeshRenderer。
+        meshRenderer.enabled = false;
 
         // 计算逆质量
         var invMasses = new float[numParticles];
@@ -156,8 +156,8 @@ public class ClothRuntimeSpawner : MonoBehaviour
             typeof(ParticlePrevPosition),
             typeof(ParticleVelocity),
             typeof(ParticleInvMass),
-            typeof(ClothEdge),
-            typeof(ClothDistanceLambda),
+            typeof(XPBDEdge),
+            typeof(XPBDDistanceLambda),
             typeof(TriangleIndex),
             typeof(RenderMeshConfig)
         };
@@ -198,18 +198,18 @@ public class ClothRuntimeSpawner : MonoBehaviour
         }
 
         // 边数据
-        var edgeBuf = entityManager.GetBuffer<ClothEdge>(clothEntity);
-        var lambdaBuf = entityManager.GetBuffer<ClothDistanceLambda>(clothEntity);
+        var edgeBuf = entityManager.GetBuffer<XPBDEdge>(clothEntity);
+        var lambdaBuf = entityManager.GetBuffer<XPBDDistanceLambda>(clothEntity);
 
         foreach (var kvp in edgeDict)
         {
-            edgeBuf.Add(new ClothEdge
+            edgeBuf.Add(new XPBDEdge
             {
                 IndexA = kvp.Key.Item1,
                 IndexB = kvp.Key.Item2,
                 RestLength = kvp.Value
             });
-            lambdaBuf.Add(new ClothDistanceLambda { Value = 0f });
+            lambdaBuf.Add(new XPBDDistanceLambda { Value = 0f });
         }
 
         // 三角形索引（模拟三角形，用于绑定查找）
@@ -284,7 +284,7 @@ public class ClothRuntimeSpawner : MonoBehaviour
     {
         Mesh mesh = new Mesh();
         mesh.name = "Cloth_DOTS_Runtime";
-        mesh.MarkDynamic(); // 每帧更新顶点，标记为Dynamic VBO
+        mesh.MarkDynamic();
         List<Vector3> vertices = new List<Vector3>();
         List<int> triangles = new List<int>();
         List<Vector2> uvs = new List<Vector2>();

@@ -1,4 +1,4 @@
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,7 +6,7 @@ using UnityEngine;
 
 public class PlayerControllerByForce : MonoBehaviour
 {
-    public Transform curTrans; // 当前操纵小节的位置 最好在rope写个接口好点儿
+    public Transform curTrans;
     public int curSectionIndex = 0;// 当前操纵小节的下标
     public float detectRaius = 10f;
     public Camera mainCamera;

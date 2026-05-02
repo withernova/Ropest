@@ -1,4 +1,4 @@
-using DG.Tweening;
+ï»¿using DG.Tweening;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -53,7 +53,7 @@ public class MapManager : MonoBehaviour
         GameObject map = Instantiate(Resources.Load<GameObject>("Prefabs/" + path));
       
         LevelMap levelMap = map.GetComponent<LevelMap>();
-        //TODO: ÏêÏ¸Ê±¼äÊµÏÖ
+        //TODO: ï¿½ï¿½Ï¸Ê±ï¿½ï¿½Êµï¿½ï¿½
         if (previousMap.Count > 0)
         {
             levelMap.SetBeginningPos(previousMap.Last().GetLasPos().x);

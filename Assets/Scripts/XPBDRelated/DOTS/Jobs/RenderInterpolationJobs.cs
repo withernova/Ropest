@@ -1,20 +1,10 @@
-using Unity.Burst;
+﻿using Unity.Burst;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
 using System.Runtime.InteropServices;
 
-// ============================================================
-// 渲染网格插值 Jobs
-// 位置：纯线性重心坐标插值（物理正确）
-// 法线：用模拟网格的顶点法线进行重心坐标插值（视觉平滑）
-// ============================================================
 
-/// <summary>
-/// 渲染顶点绑定数据（Burst友好的blittable结构）
-/// 内存布局必须与 RenderVertexBinding 完全一致（int,int,int,float,float,float 顺序），
-/// 以便直接通过 DynamicBuffer.Reinterpret 零拷贝复用。
-/// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct RenderBindingData
 {
@@ -26,18 +16,6 @@ public struct RenderBindingData
     public float W;     // 重心坐标w（对应SimI2）
 }
 
-/// <summary>
-/// 位置 + 法线 插值Job
-/// 
-/// 位置：纯线性重心坐标插值
-///   renderPos = u*p0 + v*p1 + w*p2
-/// 
-/// 法线：用模拟网格的顶点法线（面积加权平均，已平滑）进行重心坐标插值
-///   renderNormal = normalize(u*n0 + v*n1 + w*n2)
-/// 
-/// 这样即使位置在平面上，法线也是平滑过渡的，
-/// 渲染时光照计算会产生平滑的视觉效果（类似Phong Shading）
-/// </summary>
 [BurstCompile]
 public struct InterpolatePositionAndNormalJob : IJobParallelFor
 {
@@ -68,14 +46,6 @@ public struct InterpolatePositionAndNormalJob : IJobParallelFor
     }
 }
 
-/// <summary>
-/// 计算模拟网格顶点法线的Job（面积加权平均法线）
-/// 这个法线是"平滑法线"——每个顶点的法线是其相邻面法线的加权平均
-/// 用于渲染时产生平滑的光照效果
-/// 
-/// 三角形索引以 int3 形式传入，可直接从 SurfaceTriangleIndex / TriangleIndex Buffer
-/// 零拷贝 reinterpret 得到（两者皆为 {int,int,int} 同布局）。
-/// </summary>
 [BurstCompile]
 public struct ComputeSimNormalsJob : IJob
 {

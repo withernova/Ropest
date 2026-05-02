@@ -1,17 +1,8 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
 
 namespace BasketballGame
 {
-    /// <summary>
-    /// 屏幕 HUD：
-    /// 1. 蓄力条（底部中央）：显示当前 Shooter.CurrentPower
-    /// 2. 分数（右上角）
-    /// 3. 瞄准准心（屏幕中央）
-    /// 4. 最近一张布料的停留进度条（屏幕上方中央）
-    ///
-    /// 纯代码方式自动构建 UI（不依赖预设），挂到任意 GameObject 上即可使用。
-    /// </summary>
     public class BasketballHUD : MonoBehaviour
     {
         [Header("引用")]
@@ -25,7 +16,7 @@ namespace BasketballGame
         private Image _crosshair;
         private Slider _stayBar;
         private Text _stateText;
-        private Text _goalPopupText;   // 进球瞬间的 "GOAL! +1" 提示
+        private Text _goalPopupText;
         private int _lastScore = 0;    // 用于检测分数增量触发动画
         private float _goalPopupTimer = 0f;  // 剩余显示时间（0=不显示）
         private float _scorePulseTimer = 0f; // 分数文字放大脉冲剩余时间
@@ -129,9 +120,6 @@ namespace BasketballGame
             _lastScore = s;
         }
 
-        // =========================================================
-        // UI 构建（纯代码）
-        // =========================================================
         private void BuildUI()
         {
             // Canvas

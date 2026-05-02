@@ -1,14 +1,9 @@
-using Unity.Burst;
+﻿using Unity.Burst;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
 
-/// <summary>
-/// Rope XPBD模拟系统 - 在FixedStep中运行
-/// 调度顺序：ResetLambda -> PreSolve -> [SubSteps: Edge + BendTwist] -> PostSolve
-/// 注意：SystemAPI.Query最多支持8个类型参数，因此使用EntityQuery手动获取Buffer
-/// </summary>
 [UpdateInGroup(typeof(FixedStepSimulationSystemGroup))]
 public partial struct RopeSimulationSystem : ISystem
 {
@@ -42,11 +37,6 @@ public partial struct RopeSimulationSystem : ISystem
         float dt = SystemAPI.Time.DeltaTime;
         if (dt <= 0f) return;
 
-        // 关键：在主线程上用 EntityManager.GetBuffer 访问 ParticlePosition 等组件之前，
-        // 必须完成所有相关 ComponentType 上的未决读写 Job。
-        // 不用 EntityManager.CompleteAllTrackedJobs()：它会 ClearDependencies()，
-        // 破坏 ECS 的 fence 追踪，会波及其他系统（例如 AnalyticalCollider 相关 Job 链）。
-        // 用 _ropeQuery.CompleteDependency() 只等 Query 声明的 ComponentType 的 fence，精准无副作用。
         _ropeQuery.CompleteDependency();
 
         // 拉取场景中的解析碰撞体（与 Cloth/SoftBody 相同的数据源）。
@@ -55,17 +45,10 @@ public partial struct RopeSimulationSystem : ISystem
 
         var entities = _ropeQuery.ToEntityArray(Allocator.Temp);
 
-        // 累积每个 rope 实体 Job 链的依赖，循环内不能直接覆盖 state.Dependency，
-        // 否则会丢失前一个 rope 的依赖；并且下一个 rope 的 Job 必须串行等待前一个完成，
-        // 因为它们写同一个 ComponentType（ParticlePosition 等）。
         JobHandle combinedDependency = state.Dependency;
 
         for (int e = 0; e < entities.Length; e++)
         {
-            // 关键：在用 EntityManager.GetBuffer 同步访问 ParticlePosition/GhostPosition 之前，
-            // 必须把上一轮循环里针对这些 ComponentType 调度的 Job 全部完成。
-            // ECS 的 AtomicSafety 按 ComponentType 做全局检查，不区分 entity，
-            // 即便这里读的是不同 entity 的 buffer，只要有未完成的同类型写 Job 就会抛异常。
             combinedDependency.Complete();
 
             var entity = entities[e];
@@ -187,9 +170,6 @@ public partial struct RopeSimulationSystem : ISystem
                         RestLengths = restLenArr,
                         Lambdas = btLambdas,
                         BendTwistKs = cfg.BendTwistKs,
-                        // 修复：BendTwist 必须有自己独立的 compliance（原版 RopeContraints.cs 中基类默认 stiff=0.6f）。
-                        // 先前错误地共用了 cfg.EdgeStiffness=0.0001f，导致 α 比原版小 ~6000 倍，
-                        // 约束过于刚性 → factor_matrix 数值病态 → 第2~4帧发散为 NaN/Inf，绳子消失。
                         Stiffness = cfg.BendTwistStiffness,
                         Dt = dt,
                         NumPoints = numPoints,

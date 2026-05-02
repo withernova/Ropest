@@ -1,4 +1,4 @@
-using NUnit.Framework;
+﻿using NUnit.Framework;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -108,12 +108,6 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
         ghostInvMass = Enumerable.Repeat(m, pointPos.Count() - 1).ToArray();
         pointInvMass = Enumerable.Repeat(m, pointPos.Count()).ToArray();
         pointInvMass[0] = ctrlMass;
-        //for (int i = 0; i < pointPos.Count(); i++)
-        //{
-        //    pointInvMass[i] = i + 1;
-        //    if(i != pointPos.Count() - 1)
-        //        ghostInvMass[i] = i + 1;
-        //}
         for (int i = 0; i < pointPos.Count(); i++)
         {
             new PointData(m, i);
@@ -131,14 +125,8 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
     {
         float oneOverdt = 1f / dt;
 
-        //For each particle
         for (int i = 0; i < pointPos.Count(); i++)
         {
-            //if (pointInvMass[i] == 0)
-            //{
-            //    continue;
-            //}
-            //v = (x - xPrev) / dt
             if (i == ctrlIndex && pointInvMass[i] != 0)
             {
                 pointPos[i] += move;
@@ -167,7 +155,6 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
                     );
                     Vector3 correctionVector = distance * direction;
 
-                    //the most inelegant way, but time is short
                     if (overlapped)
                     {
                         pointPos[i] += correctionVector;
@@ -179,10 +166,7 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
                 }
             }
 
-            //pointPos[i] = prevPos[i] + vel[i] * dt;
             vel[i] = (pointPos[i] - prevPos[i]) * oneOverdt;
-
-            // 往前对于pointPos的更新是改变n帧的预测位置
 
             if (i < pointPos.Count() - 1)
                 ghostVels[i] = (vel[i] + vel[i + 1]) / 2;
@@ -194,8 +178,6 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
     void SetCapsuleFromTo(Vector3 start, Vector3 end)
     {
         var capParent = cc.transform;
-
-        //Set mid of capsule to mid of in-between vector
         var delta = end - start;
         capParent.position = start + (delta / 2f);
 
@@ -217,16 +199,6 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
                 continue;
             }
             vel[i] += gravity * gravityFactor * dt;
-
-            //if (i == 0 || i == pointPos.Count() - 1)
-            //{
-            //    pointPos[i] = prevPos[i];
-            //    continue;
-            //}
-            //vel[i] += g * dt;
-
-            // n+1帧：往前的pointpos是第n帧的实际位置
-
 
             prevPos[i] = pointPos[i];
             vel[i] = Vector3.ClampMagnitude(vel[i], new Vector3(2.5f, 2.5f, 2.5f).magnitude);
@@ -366,14 +338,10 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
 
         if (target == null) return;
         PointData.datas[ctrlIndex].SetActive(target);
-        //先设置更新的位移
-        //enforceMove = target.transform.position - pointPos[ctrlIndex];
         target.OnStart();
         target.transform.position = pointPos[ctrlIndex];
         gravityFactor += 0.1f;
 
-        //然后设置质量
-        //pointInvMass[ctrlIndex] += target.GetMass();
     }
 
     public void SwitchCtrl(int i)
@@ -400,24 +368,8 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
     }
 
 
-    //public override void StartGrab(Vector3 grabPos, Transform trans)
-    //{
-    //    grabPoint = FindClosestPoint(grabPos, trans);
-
-    //    grabInvMass = invMass[grabPoint];
-    //    vel[grabPoint] = Vector3.zero;
-
-    //    Debug.Log(grabPoint);
-    //}
-
-    //public override void EndGrab(Vector3 grabPos, Transform trans)
-    //{
-    //    invMass[grabPoint] = grabInvMass;
-    //    grabPoint = -1;
-    //}
     public void TryRendering(Mesh mesh)
     {
-        //更新pos
         List<Vector3> newpos = new List<Vector3>();
         newpos.Add(pointPos[0]);
 
@@ -474,7 +426,6 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
                 }
                 else
                 {
-                    // 插值旋转
                     float r = ((i * segmentLength)) / le;
                     Vector3 scaledTheta = theta * n.normalized * r;
                     float cosR = Mathf.Cos(scaledTheta.magnitude);
@@ -495,32 +446,11 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
                     Matrix4x4 interpolatedFrame = rotationInterpolated * De1;
                     interpolatedFrames.Add(interpolatedFrame);
 
-                    // 使用插值后的 d3 进行步进
                     Vector3 d3 = (Vector3)interpolatedFrame.GetColumn(2).normalized;
                     currentPosition = currentPosition + d3 * segmentLength;
                     sPosition.Add(currentPosition);
                 }
             }
-            //sPosition.Add(vml);
-            // -----------------------------------
-
-            //string log = "";
-            //Debug.Log("_________________________________");
-            //Debug.Log($"非插值前d3{d3f} ");
-            //interpolatedFrames.ForEach(frame => log += $"插值d3:{(Vector3)frame.GetColumn(2)} ");
-            //Debug.Log(log);
-            //Debug.Log($"非插值后d3{d3l}");
-
-            //Debug.Log("_________________________________");
-
-            //for (int j = 0; j < subdivision; ++j)
-            //{
-            //    float angle = 2 * math.PI * j / subdivision;
-            //    Vector3 vertex = vm + radius * (math.cos(angle) * (Vector3)d1f.normalized + math.sin(angle) * (Vector3)d2f.normalized);
-            //    newpos.Add(vertex);
-            //}
-
-            // 将截面点存储到 allSections 中
             List<Vector3> sectionPoints = new List<Vector3>();
             for (int i = 0; i < interplor - 1; i++)
             {
@@ -537,8 +467,6 @@ public class RopeXPBDSolver : XPBDSolver, IControllable
 
         newpos.Add(pointPos.Last());
 
-        //pos = newpos.ToArray();
-        // 生成网格
         GenerateMeshCosserat(newpos, mesh, subdivision);
     }
 

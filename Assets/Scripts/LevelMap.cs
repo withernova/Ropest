@@ -1,4 +1,4 @@
-using DG.Tweening;
+﻿using DG.Tweening;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
@@ -40,9 +40,6 @@ public class LevelMap : MonoBehaviour
         Vector3 newPos = transform.position;
         newPos.x = pos + transform.position.x - this.transform.Find("beginningPos").position.x;
         transform.position = newPos;
-        //float x = this.transform.Find("beginningPos").position.x;
-        //this.transform.Find("beginningPos").position = new Vector3(pos, 0, 0);
-        //this.transform.Find("object").position += new Vector3(pos - x, 0, 0);
     }
 
     private void OnTriggerEnter(Collider other)

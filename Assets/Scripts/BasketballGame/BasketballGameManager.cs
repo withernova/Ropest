@@ -1,22 +1,12 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 namespace BasketballGame
 {
-    /// <summary>
-    /// 投篮小游戏总控
-    /// 职责：
-    /// 1. 管理场上球 / 布料 的数量上限（最多 2 球 + 3 布）
-    /// 2. 维护计分
-    /// 3. 提供全局配置（投掷参数、布料参数、场地参数）
-    /// </summary>
     public class BasketballGameManager : MonoBehaviour
     {
         public static BasketballGameManager Instance { get; private set; }
 
-        // -----------------------------
-        // 场地与目标区域配置
-        // -----------------------------
         [Header("场地参数")]
         [Tooltip("玩家站位（相机以此为中心）")]
         public Transform playerStand;
@@ -24,12 +14,25 @@ namespace BasketballGame
         public Transform targetAreaCenter;
         [Tooltip("布料升起区域半径（随机位置的散布范围，XZ平面）")]
         public float targetAreaRadius = 6f;
-        [Tooltip("布料升起的高度（相对 targetAreaCenter.y）")]
-        public float clothRiseHeight = 3.5f;
+        [Tooltip("布料升起的高度下限（相对 targetAreaCenter.y）")]
+        public float clothRiseHeightMin = 3f;
+        [Tooltip("布料升起的高度上限（相对 targetAreaCenter.y）。每张布料在 [Min, Max] 间随机一个高度")]
+        public float clothRiseHeightMax = 7f;
 
-        // -----------------------------
-        // 投掷参数
-        // -----------------------------
+        /// <summary>
+        /// 兼容旧接口：返回一个随机高度，位于 [clothRiseHeightMin, clothRiseHeightMax] 之间。
+        /// 每次读取都会返回一个新的随机值，用于让每张布料最终停在不同高度。
+        /// </summary>
+        public float clothRiseHeight
+        {
+            get
+            {
+                float lo = Mathf.Min(clothRiseHeightMin, clothRiseHeightMax);
+                float hi = Mathf.Max(clothRiseHeightMin, clothRiseHeightMax);
+                return Random.Range(lo, hi);
+            }
+        }
+
         [Header("投掷参数")]
         [Tooltip("最小出手速度（蓄力=0时）")]
         public float minShootSpeed = 4f;
@@ -42,33 +45,21 @@ namespace BasketballGame
         [Tooltip("球初始位置（相对相机的偏移，局部空间）")]
         public Vector3 ballSpawnLocalOffset = new Vector3(0.4f, -0.3f, 0.8f);
 
-        // -----------------------------
-        // 进球判定
-        // -----------------------------
         [Header("进球判定")]
         [Tooltip("得分需要在布料内停留的时间（秒）")]
         public float requiredStayDuration = 3.5f;
         [Tooltip("判定球进入布料区域的球心半径（以布料中心为准）")]
         public float scoreTriggerRadius = 2.0f;
 
-        // -----------------------------
-        // 数量上限
-        // -----------------------------
         [Header("数量上限")]
         public int maxActiveBalls = 2;
         public int maxActiveCloths = 3;
 
-        // -----------------------------
-        // 内部状态
-        // -----------------------------
         private readonly List<BasketballBall> _activeBalls = new();
         private readonly List<BasketballClothTarget> _activeCloths = new();
 
         public int Score { get; private set; }
 
-        // -----------------------------
-        // 事件
-        // -----------------------------
         public System.Action<int> OnScoreChanged;
         public System.Action<BasketballClothTarget> OnTargetScored;
 
@@ -87,9 +78,6 @@ namespace BasketballGame
             if (Instance == this) Instance = null;
         }
 
-        // =========================================================
-        // 球管理
-        // =========================================================
         public void RegisterBall(BasketballBall ball)
         {
             _activeBalls.Add(ball);
@@ -111,9 +99,6 @@ namespace BasketballGame
             }
         }
 
-        // =========================================================
-        // 布料管理
-        // =========================================================
         public void RegisterCloth(BasketballClothTarget cloth)
         {
             _activeCloths.Add(cloth);
@@ -139,9 +124,6 @@ namespace BasketballGame
             }
         }
 
-        // =========================================================
-        // 计分
-        // =========================================================
         public void AddScore(int delta, BasketballClothTarget source)
         {
             Score += delta;

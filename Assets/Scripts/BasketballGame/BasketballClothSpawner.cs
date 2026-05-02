@@ -1,17 +1,8 @@
-using System.Collections;
+﻿using System.Collections;
 using UnityEngine;
 
 namespace BasketballGame
 {
-    /// <summary>
-    /// 布料目标生成器：周期性地在目标区域内的随机位置生成一张布料，
-    /// 由 BasketballGameManager 限制同时存在的数量（超过上限会自动销毁最早的）。
-    ///
-    /// 布料结构：
-    ///  - 通过 ClothRuntimeSpawner 创建
-    ///  - 默认顶部两角固定（fixedVertices 设置为 [0, subdivision]，上边缘左右两端）
-    ///  - meshOrigin 使用"地下起点"，BasketballClothTarget 内部通过移动固定点实现"升起"
-    /// </summary>
     public class BasketballClothSpawner : MonoBehaviour
     {
         [Header("预制体（挂有 ClothRuntimeSpawner + BasketballClothTarget）")]
@@ -66,9 +57,6 @@ namespace BasketballGame
             }
         }
 
-        /// <summary>
-        /// 手动生成一张布料（也可被外部调用）
-        /// </summary>
         public BasketballClothTarget SpawnOne()
         {
             var gm = BasketballGameManager.Instance;
@@ -93,17 +81,6 @@ namespace BasketballGame
                 targetOrigin = new Vector3(playerPos.x + flat.x, targetOrigin.y, playerPos.z + flat.z);
             }
 
-            // 关键：布料的 "meshOrigin" 是布料左下角（生成用），布料中心应当在 targetOrigin
-            // 所以先算布料中心偏移：宽度 length 在 X，高度 width 在 Z
-            // 但我们希望布料是竖直的（门帘式）：在 Spawner 生成后，布料是躺平在XZ平面的
-            // 为了让它"站起来"，我们让 prefab 本身的 ClothRuntimeSpawner 已经配置为竖直放置（通过 length 指 X，width 指 Y 方向）
-            // 实际上 ClothRuntimeSpawner 的 CreateClothMesh 把顶点放在 XZ 平面。
-            // 为了简单起见，我们让布料"门帘"的法线朝向玩家，X沿玩家水平方向，Z方向=垂直于地面
-            // 这需要改动 ClothRuntimeSpawner，或者我们在 BasketballClothTarget 里把粒子旋转90度。
-            // 更简单的方案：给 clothPrefab 配置成"躺在地上"的布，垂直升起 clothRiseHeight 后在高空平铺，
-            //              球从下方穿过判定 (球心进入一个以布料中心为心，半径=scoreTriggerRadius 的球体)。
-            // 这样"球投进布料"= 球从下/侧飞到半空中这张平铺布料的圆心附近。
-
             // Instantiate 时不激活，以便先配置参数再启动 Spawner
             var go = Instantiate(clothPrefab);
             go.name = $"ClothTarget_{Time.frameCount}";
@@ -121,7 +98,7 @@ namespace BasketballGame
             var target = go.GetComponent<BasketballClothTarget>();
             if (target == null) target = go.AddComponent<BasketballClothTarget>();
             target.Init(targetOrigin);
-            go.SetActive(true); // 激活后触发 ClothRuntimeSpawner.Start() 生成粒子
+            go.SetActive(true);
 
             gm.RegisterCloth(target);
             return target;

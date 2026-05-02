@@ -1,15 +1,5 @@
-using UnityEngine;
+﻿using UnityEngine;
 
-/// <summary>
-/// 碰撞测试用例 - 创建一个运动球体和一个运动方体
-/// 球体和方体会在两个位置之间来回运动，中间会停顿一段时间
-/// 用于测试布料XPBD解析碰撞的效果
-/// 
-/// 使用方式：
-/// 1. 创建空GameObject，挂载此脚本
-/// 2. 确保场景中有 AnalyticalColliderManager
-/// 3. 运行后会自动创建球体和方体，并注册到碰撞管理器
-/// </summary>
 public class CollisionTestSetup : MonoBehaviour
 {
     [Header("球体参数")]
@@ -118,9 +108,6 @@ public class CollisionTestSetup : MonoBehaviour
         // UpdateBoxMotion();
     }
 
-    /// <summary>
-    /// 球体运动：在两点之间来回移动，到达端点后停顿一段时间
-    /// </summary>
     void UpdateSphereMotion()
     {
         if (_sphereObj == null) return;
@@ -155,10 +142,6 @@ public class CollisionTestSetup : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// 方体运动：在两点之间来回移动，到达端点后停顿一段时间
-    /// 同时缓慢旋转，测试旋转Box的碰撞
-    /// </summary>
     void UpdateBoxMotion()
     {
         if (_boxObj == null) return;

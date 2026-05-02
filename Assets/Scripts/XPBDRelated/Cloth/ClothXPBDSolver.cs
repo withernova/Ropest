@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
@@ -25,14 +25,6 @@ public class ClothXPBDSolver : XPBDSolver
     protected override void AddConstraints()
     {
         m_constraints.Add(new DistanceConstraint(this));
-        //m_constraints.Add(new CollisionConstraint(this));
-        //m_constraints.Add(new VolumeConstraint(this));
-        //m_constraints.Add(new SectionVolume2Constraint(this));
-        //m_constraints.Add(new SectionAreaConstriant(this));
-        //m_constraints.Add(new SectionDistanceConstraint(this));
-        //m_constraints.Add(new RoundConstraint(this));
-        //m_constraints.Add(new ElasticConstraint(this));
-        //m_constraints.Add(new BendingConstraint(this));
     }
 
     protected override void InitSolver(Mesh mesh, SolverInitData data)
