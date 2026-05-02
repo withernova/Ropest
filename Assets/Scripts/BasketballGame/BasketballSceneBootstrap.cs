@@ -20,6 +20,16 @@ namespace BasketballGame
         [Range(4, 30)] public int clothSegments = 10;
         [Range(4, 30)] public int clothSubdivision = 10;
 
+        [Header("并行求解开关（调试用）")]
+        [Tooltip("是否为布料启用图着色(Graph Coloring)并行距离约束求解。\n" +
+                 "开启：距离约束按颜色分组并行调度 IJobParallelFor；\n" +
+                 "关闭：回退为串行 IJob。")]
+        public bool clothUseGraphColoring = false;
+
+        [Tooltip("是否为球体软体启用图着色(Graph Coloring)并行求解（距离约束 + 体积约束）。\n" +
+                 "开启：按颜色分组并行；关闭：回退为串行 IJob。")]
+        public bool ballUseGraphColoring = false;
+
         void Awake()
         {
             BuildScene();
@@ -122,6 +132,8 @@ namespace BasketballGame
             spawner.friction = 0.35f;
             spawner.renderSubdivisionIterations = 1;
             spawner.gravity = new Vector3(0, -9.8f, 0);
+            // 透传图着色并行开关（由 BasketballSceneBootstrap 控制，方便调试对比）
+            spawner.useGraphColoring = ballUseGraphColoring;
 
             go.AddComponent<BasketballBall>();
 
@@ -154,6 +166,8 @@ namespace BasketballGame
             spawner.friction = 0.4f;
             spawner.renderSubdivisionIterations = 1;
             spawner.gravity = new Vector3(0, -2f, 0); // 小重力，让布料飘一点但不会垮塌
+            // 透传图着色并行开关（由 BasketballSceneBootstrap 控制，方便调试对比）
+            spawner.useGraphColoring = clothUseGraphColoring;
 
             // 固定四个角（让布在空中保持平展，像一块蹦床）
             // 网格索引：segments+1 行 × subdivision+1 列，按 i*(subdivision+1)+j 索引

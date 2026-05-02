@@ -24,6 +24,12 @@ public class ClothRuntimeSpawner : MonoBehaviour
     [Range(0.01f, 0.5f)] public float collisionRadius = 0.05f;
     [Range(0f, 1f)] public float friction = 0.4f;
 
+    [Header("并行求解开关")]
+    [Tooltip("是否启用图着色(Graph Coloring)并行距离约束求解。\n" +
+             "开启后边约束会按贪心颜色分组按色并行调度 IJobParallelFor，\n" +
+             "关闭时回退原先的串行 IJob 方案（数值行为略有不同，但稳定性一致）。")]
+    public bool useGraphColoring = false;
+
     [Header("渲染网格细分")]
     [Tooltip("渲染网格细分迭代次数（0=不细分直接用模拟网格，1=4倍面数，2=16倍面数）")]
     [Range(0, 3)] public int renderSubdivisionIterations = 1;
@@ -165,6 +171,10 @@ public class ClothRuntimeSpawner : MonoBehaviour
         {
             componentTypes.Add(typeof(RenderVertexBinding));
         }
+        if (useGraphColoring)
+        {
+            componentTypes.Add(typeof(XPBDEdgeColorRange));
+        }
         var archetype = entityManager.CreateArchetype(componentTypes.ToArray());
 
         clothEntity = entityManager.CreateEntity(archetype);
@@ -179,7 +189,8 @@ public class ClothRuntimeSpawner : MonoBehaviour
             DistanceStiffness = distanceStiffness,
             Damping = damping,
             CollisionRadius = collisionRadius,
-            Friction = friction
+            Friction = friction,
+            UseGraphColoring = useGraphColoring
         });
 
         // === 填充Buffer数据（GetBuffer不触发结构性变更） ===
@@ -197,19 +208,54 @@ public class ClothRuntimeSpawner : MonoBehaviour
             massBuf.Add(new ParticleInvMass { Value = invMasses[i] });
         }
 
-        // 边数据
+        // 边数据：先收集到数组，若启用图着色则对边按颜色重排
+        var edgeArrayRaw = new XPBDEdge[edgeDict.Count];
+        {
+            int ei = 0;
+            foreach (var kvp in edgeDict)
+            {
+                edgeArrayRaw[ei++] = new XPBDEdge
+                {
+                    IndexA = kvp.Key.Item1,
+                    IndexB = kvp.Key.Item2,
+                    RestLength = kvp.Value
+                };
+            }
+        }
+
+        XPBDEdge[] finalEdges;
+        (int Start, int Count)[] edgeColorRanges = null;
+        if (useGraphColoring && edgeArrayRaw.Length > 0)
+        {
+            int numColors = GraphColoringHelper.ColorEdges(edgeArrayRaw, numParticles, out var edgeColors);
+            GraphColoringHelper.GroupByColor(edgeArrayRaw, edgeColors, numColors, out finalEdges, out edgeColorRanges);
+            Debug.Log($"[Cloth] 图着色完成: 边={finalEdges.Length}, 颜色数={numColors}, 平均每色边数={(float)finalEdges.Length / math.max(numColors, 1):F1}");
+        }
+        else
+        {
+            finalEdges = edgeArrayRaw;
+        }
+
         var edgeBuf = entityManager.GetBuffer<XPBDEdge>(clothEntity);
         var lambdaBuf = entityManager.GetBuffer<XPBDDistanceLambda>(clothEntity);
-
-        foreach (var kvp in edgeDict)
+        for (int i = 0; i < finalEdges.Length; i++)
         {
-            edgeBuf.Add(new XPBDEdge
-            {
-                IndexA = kvp.Key.Item1,
-                IndexB = kvp.Key.Item2,
-                RestLength = kvp.Value
-            });
+            edgeBuf.Add(finalEdges[i]);
             lambdaBuf.Add(new XPBDDistanceLambda { Value = 0f });
+        }
+
+        // 填充颜色区间（仅开启图着色时有效）
+        if (edgeColorRanges != null)
+        {
+            var rangeBuf = entityManager.GetBuffer<XPBDEdgeColorRange>(clothEntity);
+            for (int c = 0; c < edgeColorRanges.Length; c++)
+            {
+                rangeBuf.Add(new XPBDEdgeColorRange
+                {
+                    Start = edgeColorRanges[c].Start,
+                    Count = edgeColorRanges[c].Count
+                });
+            }
         }
 
         // 三角形索引（模拟三角形，用于绑定查找）

@@ -106,30 +106,81 @@ public partial struct SoftBodySimulationSystem : ISystem
             JobHandle constraintHandle = preSolveHandle;
             for (int step = 0; step < baseCfg.NumSubSteps; step++)
             {
-                // 距离约束（共享 XPBDDistanceConstraintJob）
-                var distJob = new XPBDDistanceConstraintJob
-                {
-                    Positions = posArr,
-                    InvMasses = invMassArr,
-                    Edges = edgeArr,
-                    Lambdas = distLambdaArr,
-                    Stiffness = baseCfg.DistanceStiffness,
-                    Dt = dt
-                };
-                constraintHandle = distJob.Schedule(constraintHandle);
+                bool useColoring = cfg.UseGraphColoring;
 
-                // 体积约束（软体专属）
-                var volJob = new SoftBodyVolumeConstraintJob
+                // === 距离约束 ===
+                if (useColoring && state.EntityManager.HasBuffer<XPBDEdgeColorRange>(entity))
                 {
-                    Positions = posArr,
-                    InvMasses = invMassArr,
-                    Tets = tetArr,
-                    RestVolumes = restVolArr,
-                    Lambdas = volLambdaArr,
-                    Stiffness = cfg.VolumeStiffness,
-                    Dt = dt
-                };
-                constraintHandle = volJob.Schedule(constraintHandle);
+                    var edgeColorRanges = state.EntityManager.GetBuffer<XPBDEdgeColorRange>(entity);
+                    for (int c = 0; c < edgeColorRanges.Length; c++)
+                    {
+                        int colorCount = edgeColorRanges[c].Count;
+                        if (colorCount <= 0) continue;
+
+                        var distColoredJob = new XPBDDistanceConstraintColoredJob
+                        {
+                            Positions = posArr,
+                            InvMasses = invMassArr,
+                            Edges = edgeArr,
+                            Lambdas = distLambdaArr,
+                            Stiffness = baseCfg.DistanceStiffness,
+                            Dt = dt,
+                            ColorStart = edgeColorRanges[c].Start
+                        };
+                        constraintHandle = distColoredJob.Schedule(colorCount, 64, constraintHandle);
+                    }
+                }
+                else
+                {
+                    var distJob = new XPBDDistanceConstraintJob
+                    {
+                        Positions = posArr,
+                        InvMasses = invMassArr,
+                        Edges = edgeArr,
+                        Lambdas = distLambdaArr,
+                        Stiffness = baseCfg.DistanceStiffness,
+                        Dt = dt
+                    };
+                    constraintHandle = distJob.Schedule(constraintHandle);
+                }
+
+                // === 体积约束（软体专属） ===
+                if (useColoring && state.EntityManager.HasBuffer<SoftBodyTetColorRange>(entity))
+                {
+                    var tetColorRanges = state.EntityManager.GetBuffer<SoftBodyTetColorRange>(entity);
+                    for (int c = 0; c < tetColorRanges.Length; c++)
+                    {
+                        int colorCount = tetColorRanges[c].Count;
+                        if (colorCount <= 0) continue;
+
+                        var volColoredJob = new SoftBodyVolumeConstraintColoredJob
+                        {
+                            Positions = posArr,
+                            InvMasses = invMassArr,
+                            Tets = tetArr,
+                            RestVolumes = restVolArr,
+                            Lambdas = volLambdaArr,
+                            Stiffness = cfg.VolumeStiffness,
+                            Dt = dt,
+                            ColorStart = tetColorRanges[c].Start
+                        };
+                        constraintHandle = volColoredJob.Schedule(colorCount, 32, constraintHandle);
+                    }
+                }
+                else
+                {
+                    var volJob = new SoftBodyVolumeConstraintJob
+                    {
+                        Positions = posArr,
+                        InvMasses = invMassArr,
+                        Tets = tetArr,
+                        RestVolumes = restVolArr,
+                        Lambdas = volLambdaArr,
+                        Stiffness = cfg.VolumeStiffness,
+                        Dt = dt
+                    };
+                    constraintHandle = volJob.Schedule(constraintHandle);
+                }
 
                 // 解析碰撞（共享 XPBDAnalyticalCollisionJob，软体启用摩擦）
                 if (colliderData.Length > 0)

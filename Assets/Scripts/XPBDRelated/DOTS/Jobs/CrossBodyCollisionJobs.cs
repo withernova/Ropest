@@ -107,6 +107,11 @@ public struct CrossBodyCollisionResolveJob : IJobParallelFor
     [ReadOnly] public NativeArray<float3> BodyCenters;
     // 每个 body 的有效半径（表面粒子最大到质心距离）
     [ReadOnly] public NativeArray<float> BodyRadii;
+    // 每个 body 是否是布料（1=布料，0=软体）
+    // 涉及布料的碰撞不能用 body 级 shell 约束（布料是平面/薄片，外接球半径很大且质心与法线无关），
+    // 也不能用"posI - opponentCenter"作方向（方向可能完全错，导致粒子被沿布料平面弹飞）。
+    // 对这种情况，回退到经典的"posI - posJ"粒子-粒子连线方向（贴近布料局部法线）。
+    [ReadOnly] public NativeArray<byte> BodyIsCloth;
     [ReadOnly] public NativeParallelMultiHashMap<int, int> HashMap;
 
     public NativeArray<float3> GlobalCorrections;
@@ -234,50 +239,58 @@ public struct CrossBodyCollisionResolveJob : IJobParallelFor
             return;
         }
 
+        // 自己或对方是布料？布料是平面结构，不能应用 body shell 约束与"质心方向"假设
+        bool selfIsCloth = BodyIsCloth[bodyI] != 0;
+        bool deepestIsCloth = (deepestBody >= 0) && (BodyIsCloth[deepestBody] != 0);
+        bool involvesClothForParticle = selfIsCloth || deepestIsCloth;
+
         // === 从接触到的每个对方 body 取 shell 约束，选"推开量最大"的那个 ===
         // Shell 约束（仅对"明显穿入 body 内部"的场景生效）：
         //   若 |posI - otherCenter| < otherRadius，说明 i 已在对方 body 的外接球内部，
         //   直接把 i 推到外接球表面 (otherCenter + dir * otherRadius)。
         //   推开量 shellPush = otherRadius - |posI - otherCenter|。
         //
-        // 注意：targetDist = otherRadius（不是 otherRadius + rI），
-        //   因为两球表面刚接触时 i 大约就在对方球表面外，我们不希望把 i 多推一个 rI，
-        //   那种浅接触由粒子级 overlap 精确处理即可。
+        // 关键：若自己是布料，或候选对方 body 是布料，shell 完全跳过——
+        //   布料的"外接球"是沿平面铺开的大球，对其做 shell push 会把粒子沿平面推飞到远处。
         float bestShellPush = 0f;
         float3 bestShellDir = float3.zero;
         int bestShellBody = -1;
 
-        for (int k = 0; k < nearbyCount; k++)
+        if (!selfIsCloth)
         {
-            int b;
-            if (k == 0) b = nearbyBodies.x;
-            else if (k == 1) b = nearbyBodies.y;
-            else if (k == 2) b = nearbyBodies.z;
-            else b = nearbyBodies.w;
-            if (b < 0) continue;
-
-            float3 oCenter = BodyCenters[b];
-            float oRadius = BodyRadii[b];
-            float targetDist = oRadius; // i 应该在对方 body 外接球之外
-
-            float3 dCenter = posI - oCenter;
-            float dLenSq = math.lengthsq(dCenter);
-            if (dLenSq >= targetDist * targetDist) continue; // 未穿入 shell
-
-            float dLen = (dLenSq < 1e-12f) ? 0f : math.sqrt(dLenSq);
-            float shellPush = targetDist - dLen;
-            if (shellPush > bestShellPush)
+            for (int k = 0; k < nearbyCount; k++)
             {
-                bestShellPush = shellPush;
-                bestShellBody = b;
-                if (dLen > 1e-6f)
+                int b;
+                if (k == 0) b = nearbyBodies.x;
+                else if (k == 1) b = nearbyBodies.y;
+                else if (k == 2) b = nearbyBodies.z;
+                else b = nearbyBodies.w;
+                if (b < 0) continue;
+                if (BodyIsCloth[b] != 0) continue; // 对方是布料 → 不做 shell 推开
+
+                float3 oCenter = BodyCenters[b];
+                float oRadius = BodyRadii[b];
+                float targetDist = oRadius; // i 应该在对方 body 外接球之外
+
+                float3 dCenter = posI - oCenter;
+                float dLenSq = math.lengthsq(dCenter);
+                if (dLenSq >= targetDist * targetDist) continue; // 未穿入 shell
+
+                float dLen = (dLenSq < 1e-12f) ? 0f : math.sqrt(dLenSq);
+                float shellPush = targetDist - dLen;
+                if (shellPush > bestShellPush)
                 {
-                    bestShellDir = dCenter / dLen;
-                }
-                else
-                {
-                    // i 恰好在对方质心上：用前一帧方向兜底，否则伪随机
-                    bestShellDir = float3.zero;
+                    bestShellPush = shellPush;
+                    bestShellBody = b;
+                    if (dLen > 1e-6f)
+                    {
+                        bestShellDir = dCenter / dLen;
+                    }
+                    else
+                    {
+                        // i 恰好在对方质心上：用前一帧方向兜底，否则伪随机
+                        bestShellDir = float3.zero;
+                    }
                 }
             }
         }
@@ -286,29 +299,60 @@ public struct CrossBodyCollisionResolveJob : IJobParallelFor
         //     粒子级修正在浅接触时更精确，取两者较大者沿对应方向推开 ===
         float3 finalCorr = float3.zero;
 
-        // 粒子级修正：沿 "对方质心 → i" 方向，幅度为粒子最深 overlap × shareI
+        // 粒子级修正：
+        //   - 双方都是软体：方向用 "对方质心 → i"，鲁棒的"远离对方"方向
+        //   - 任一方是布料：方向用 "posJ_deepest → i"，即粒子-粒子连线，贴近布料局部法线
         if (maxOverlap > 0f && deepestBody >= 0)
         {
-            float3 oCenter = BodyCenters[deepestBody];
-            float3 dCenter = posI - oCenter;
-            float dLenSq = math.lengthsq(dCenter);
             float3 dir;
-            if (dLenSq > 1e-10f)
+            if (involvesClothForParticle)
             {
-                dir = dCenter * math.rsqrt(dLenSq);
+                // 布料碰撞：粒子-粒子连线方向（更接近布料局部法线）
+                float3 dDiff = posI - GlobalPositions[deepestJ];
+                float dDiffLenSq = math.lengthsq(dDiff);
+                if (dDiffLenSq > 1e-10f)
+                {
+                    dir = dDiff * math.rsqrt(dDiffLenSq);
+                }
+                else
+                {
+                    // 距离为零的退化：用前一帧位置差做参考
+                    float3 refDiff = prevPosI - GlobalPrevPositions[deepestJ];
+                    float refLenSq = math.lengthsq(refDiff);
+                    if (refLenSq > 1e-12f) dir = refDiff * math.rsqrt(refLenSq);
+                    else
+                    {
+                        int seed = (i - deepestJ);
+                        dir = math.normalize(new float3(
+                            ((seed * 12.9898f) % 1f) - 0.5f,
+                            ((seed * 78.2330f) % 1f) - 0.5f + 0.1f,
+                            ((seed * 37.7190f) % 1f) - 0.5f));
+                    }
+                }
             }
             else
             {
-                float3 refDiff = prevPosI - GlobalPrevPositions[deepestJ];
-                float refLenSq = math.lengthsq(refDiff);
-                if (refLenSq > 1e-12f) dir = refDiff * math.rsqrt(refLenSq);
+                // 双方软体：用对方质心方向（稳健）
+                float3 oCenter = BodyCenters[deepestBody];
+                float3 dCenter = posI - oCenter;
+                float dLenSq = math.lengthsq(dCenter);
+                if (dLenSq > 1e-10f)
+                {
+                    dir = dCenter * math.rsqrt(dLenSq);
+                }
                 else
                 {
-                    int seed = (i - deepestJ);
-                    dir = math.normalize(new float3(
-                        ((seed * 12.9898f) % 1f) - 0.5f,
-                        ((seed * 78.2330f) % 1f) - 0.5f + 0.1f,
-                        ((seed * 37.7190f) % 1f) - 0.5f));
+                    float3 refDiff = prevPosI - GlobalPrevPositions[deepestJ];
+                    float refLenSq = math.lengthsq(refDiff);
+                    if (refLenSq > 1e-12f) dir = refDiff * math.rsqrt(refLenSq);
+                    else
+                    {
+                        int seed = (i - deepestJ);
+                        dir = math.normalize(new float3(
+                            ((seed * 12.9898f) % 1f) - 0.5f,
+                            ((seed * 78.2330f) % 1f) - 0.5f + 0.1f,
+                            ((seed * 37.7190f) % 1f) - 0.5f));
+                    }
                 }
             }
             float partMag = shareIForMax * maxOverlap;
@@ -317,7 +361,7 @@ public struct CrossBodyCollisionResolveJob : IJobParallelFor
             finalCorr = dir * partMag;
         }
 
-        // body shell 修正：如果 shell 推开量大于粒子级幅度，替换为 shell 方案
+        // body shell 修正：仅在不涉及布料时启用（前面已在收集 shell 候选时过滤）
         if (bestShellBody >= 0 && bestShellPush > math.length(finalCorr))
         {
             float3 dir = bestShellDir;
@@ -329,11 +373,7 @@ public struct CrossBodyCollisionResolveJob : IJobParallelFor
                 if (rl > 1e-12f) dir = refDir * math.rsqrt(rl);
                 else dir = new float3(0, 1, 0);
             }
-            // shell 修正同样走 shareI=0.5（双方都是动态粒子时，每边只走一半；
-            // 对方 i_opposite 也会跑这套逻辑，最终两球相互推到 shell 交界）
-            // 注意 shell 修正是单方向的：i 到 othershell 的距离，i 走 0.5 份即可
             float shellMag = 0.5f * bestShellPush;
-            // shell 修正的上限略宽松：允许一次最多推 2 个 minDist（body 级别需要更快解穿透）
             float shellCap = 2.0f * (rI * 2f);
             if (shellMag > shellCap) shellMag = shellCap;
             finalCorr = dir * shellMag;

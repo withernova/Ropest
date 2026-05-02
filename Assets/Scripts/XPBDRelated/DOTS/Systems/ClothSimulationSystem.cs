@@ -96,17 +96,44 @@ public partial struct ClothSimulationSystem : ISystem
             JobHandle constraintHandle = preSolveHandle;
             for (int step = 0; step < baseCfg.NumSubSteps; step++)
             {
-                // 距离约束（共享 XPBDDistanceConstraintJob）
-                var distJob = new XPBDDistanceConstraintJob
+                // === 距离约束 ===
+                // 根据开关在两种方案之间切换：
+                //   - 图着色并行：按颜色组串行调度，每组内部用 IJobParallelFor 并行；
+                //   - 串行 IJob：保持旧行为（全部边顺序求解）。
+                if (cfg.UseGraphColoring && state.EntityManager.HasBuffer<XPBDEdgeColorRange>(entity))
                 {
-                    Positions = posArr,
-                    InvMasses = invMassArr,
-                    Edges = edgeArr,
-                    Lambdas = lambdaArr,
-                    Stiffness = baseCfg.DistanceStiffness,
-                    Dt = dt
-                };
-                constraintHandle = distJob.Schedule(constraintHandle);
+                    var colorRanges = state.EntityManager.GetBuffer<XPBDEdgeColorRange>(entity);
+                    for (int c = 0; c < colorRanges.Length; c++)
+                    {
+                        int colorCount = colorRanges[c].Count;
+                        if (colorCount <= 0) continue;
+
+                        var distColoredJob = new XPBDDistanceConstraintColoredJob
+                        {
+                            Positions = posArr,
+                            InvMasses = invMassArr,
+                            Edges = edgeArr,
+                            Lambdas = lambdaArr,
+                            Stiffness = baseCfg.DistanceStiffness,
+                            Dt = dt,
+                            ColorStart = colorRanges[c].Start
+                        };
+                        constraintHandle = distColoredJob.Schedule(colorCount, 64, constraintHandle);
+                    }
+                }
+                else
+                {
+                    var distJob = new XPBDDistanceConstraintJob
+                    {
+                        Positions = posArr,
+                        InvMasses = invMassArr,
+                        Edges = edgeArr,
+                        Lambdas = lambdaArr,
+                        Stiffness = baseCfg.DistanceStiffness,
+                        Dt = dt
+                    };
+                    constraintHandle = distJob.Schedule(constraintHandle);
+                }
 
                 // 自碰撞：每隔2个SubStep做一次（平衡性能与效果） —— 布料专属
                 if (step % 2 == 0)

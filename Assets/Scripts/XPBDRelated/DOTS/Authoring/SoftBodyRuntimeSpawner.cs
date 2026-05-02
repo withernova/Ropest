@@ -41,6 +41,11 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
     [Range(0.01f, 0.5f)] public float collisionRadius = 0.05f;
     [Range(0f, 1f)] public float friction = 0.3f;
 
+    [Header("并行求解开关")]
+    [Tooltip("是否启用图着色(Graph Coloring)并行求解（距离约束 + 体积约束）。\n" +
+             "开启时会按颜色分组调度 IJobParallelFor，关闭时回退串行 IJob。")]
+    public bool useGraphColoring = false;
+
     [Header("渲染网格细分")]
     [Tooltip("渲染网格细分迭代次数（0=不细分直接用模拟网格，1=4倍面数，2=16倍面数）")]
     [Range(0, 3)] public int renderSubdivisionIterations = 2;
@@ -211,6 +216,11 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
         {
             componentTypes.Add(typeof(RenderVertexBinding));
         }
+        if (useGraphColoring)
+        {
+            componentTypes.Add(typeof(XPBDEdgeColorRange));
+            componentTypes.Add(typeof(SoftBodyTetColorRange));
+        }
         var archetype = entityManager.CreateArchetype(componentTypes.ToArray());
 
         softBodyEntity = entityManager.CreateEntity(archetype);
@@ -225,7 +235,8 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
             VolumeStiffness = volumeStiffness,
             Damping = damping,
             CollisionRadius = collisionRadius,
-            Friction = friction
+            Friction = friction,
+            UseGraphColoring = useGraphColoring
         });
 
         var posBuf = entityManager.GetBuffer<ParticlePosition>(softBodyEntity);
@@ -252,37 +263,106 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
             surfaceFlagBuf.Add(new ParticleSurfaceFlag { Value = surfaceFlags[i] });
         }
 
-        // 边数据
-        var edgeBuf = entityManager.GetBuffer<XPBDEdge>(softBodyEntity);
-        var distLambdaBuf = entityManager.GetBuffer<XPBDDistanceLambda>(softBodyEntity);
-
+        // 边数据：若启用图着色则对边按颜色重排
+        var edgeArrayRaw = new XPBDEdge[numEdges];
         for (int e2 = 0; e2 < numEdges; e2++)
         {
-            edgeBuf.Add(new XPBDEdge
+            edgeArrayRaw[e2] = new XPBDEdge
             {
                 IndexA = edges[e2 * 2],
                 IndexB = edges[e2 * 2 + 1],
                 RestLength = restLengths[e2]
-            });
+            };
+        }
+
+        XPBDEdge[] finalEdges;
+        (int Start, int Count)[] edgeColorRanges = null;
+        if (useGraphColoring && edgeArrayRaw.Length > 0)
+        {
+            int numEdgeColors = GraphColoringHelper.ColorEdges(edgeArrayRaw, numParticles, out var edgeColors);
+            GraphColoringHelper.GroupByColor(edgeArrayRaw, edgeColors, numEdgeColors, out finalEdges, out edgeColorRanges);
+            Debug.Log($"[SoftBody] 边图着色完成: 边={finalEdges.Length}, 颜色数={numEdgeColors}");
+        }
+        else
+        {
+            finalEdges = edgeArrayRaw;
+        }
+
+        var edgeBuf = entityManager.GetBuffer<XPBDEdge>(softBodyEntity);
+        var distLambdaBuf = entityManager.GetBuffer<XPBDDistanceLambda>(softBodyEntity);
+        for (int i = 0; i < finalEdges.Length; i++)
+        {
+            edgeBuf.Add(finalEdges[i]);
             distLambdaBuf.Add(new XPBDDistanceLambda { Value = 0f });
         }
 
-        // 四面体数据
-        var tetBuf = entityManager.GetBuffer<Tetrahedron>(softBodyEntity);
-        var tetVolBuf = entityManager.GetBuffer<TetrahedronRestVolume>(softBodyEntity);
-        var volLambdaBuf = entityManager.GetBuffer<TetrahedronVolumeLambda>(softBodyEntity);
+        if (edgeColorRanges != null)
+        {
+            var rangeBuf = entityManager.GetBuffer<XPBDEdgeColorRange>(softBodyEntity);
+            for (int c = 0; c < edgeColorRanges.Length; c++)
+            {
+                rangeBuf.Add(new XPBDEdgeColorRange
+                {
+                    Start = edgeColorRanges[c].Start,
+                    Count = edgeColorRanges[c].Count
+                });
+            }
+        }
 
+        // 四面体数据：若启用图着色则对四面体按颜色重排
+        var tetArrayRaw = new Tetrahedron[numTets];
+        var tetRestArrayRaw = new TetrahedronRestVolume[numTets];
         for (int t = 0; t < numTets; t++)
         {
-            tetBuf.Add(new Tetrahedron
+            tetArrayRaw[t] = new Tetrahedron
             {
                 I0 = tetrahedra[t * 4 + 0],
                 I1 = tetrahedra[t * 4 + 1],
                 I2 = tetrahedra[t * 4 + 2],
                 I3 = tetrahedra[t * 4 + 3]
-            });
-            tetVolBuf.Add(new TetrahedronRestVolume { Value = restVolumes[t] });
+            };
+            tetRestArrayRaw[t] = new TetrahedronRestVolume { Value = restVolumes[t] };
+        }
+
+        Tetrahedron[] finalTets;
+        TetrahedronRestVolume[] finalTetRests;
+        (int Start, int Count)[] tetColorRanges = null;
+        if (useGraphColoring && tetArrayRaw.Length > 0)
+        {
+            int numTetColors = GraphColoringHelper.ColorTets(tetArrayRaw, numParticles, out var tetColors);
+            GraphColoringHelper.GroupByColor(tetArrayRaw, tetColors, numTetColors, out finalTets, out tetColorRanges);
+            // RestVolume 与 Tet 一一对应，按同一个 colors 数组一同重排
+            GraphColoringHelper.GroupByColor(tetRestArrayRaw, tetColors, numTetColors, out finalTetRests, out _);
+            Debug.Log($"[SoftBody] 四面体图着色完成: Tet={finalTets.Length}, 颜色数={numTetColors}");
+        }
+        else
+        {
+            finalTets = tetArrayRaw;
+            finalTetRests = tetRestArrayRaw;
+        }
+
+        var tetBuf = entityManager.GetBuffer<Tetrahedron>(softBodyEntity);
+        var tetVolBuf = entityManager.GetBuffer<TetrahedronRestVolume>(softBodyEntity);
+        var volLambdaBuf = entityManager.GetBuffer<TetrahedronVolumeLambda>(softBodyEntity);
+
+        for (int t = 0; t < finalTets.Length; t++)
+        {
+            tetBuf.Add(finalTets[t]);
+            tetVolBuf.Add(finalTetRests[t]);
             volLambdaBuf.Add(new TetrahedronVolumeLambda { Value = 0f });
+        }
+
+        if (tetColorRanges != null)
+        {
+            var tetRangeBuf = entityManager.GetBuffer<SoftBodyTetColorRange>(softBodyEntity);
+            for (int c = 0; c < tetColorRanges.Length; c++)
+            {
+                tetRangeBuf.Add(new SoftBodyTetColorRange
+                {
+                    Start = tetColorRanges[c].Start,
+                    Count = tetColorRanges[c].Count
+                });
+            }
         }
 
         // 表面三角形索引（用于渲染插值时查找模拟三角形）

@@ -144,6 +144,12 @@ public partial struct CrossBodyCollisionSystem : ISystem
         var bodyCenters = new NativeArray<float3>(totalBodies, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
         // 每个 body 的"有效外接半径"（表面粒子到质心的最大距离），用于 body 级 shell 碰撞约束
         var bodyRadii = new NativeArray<float>(totalBodies, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+        // 每个 body 是否是布料（1=布料，0=软体）
+        // 布料是平面/薄片结构，不能用球体 shell 约束（会把粒子推到布料外接圆之外导致弹飞），
+        // 因此涉及布料的碰撞必须走纯粒子级修正，方向用 posI-posJ（贴近布料局部法线）。
+        var bodyIsCloth = new NativeArray<byte>(totalBodies, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+        for (int i = 0; i < numCloth; i++) bodyIsCloth[i] = 1;
+        for (int i = 0; i < numSoft; i++) bodyIsCloth[numCloth + i] = 0;
 
         // === 1. 主线程收集：把所有实体的 Buffer 数据拷到全局数组 ===
         for (int i = 0; i < numCloth; i++)
@@ -245,6 +251,7 @@ public partial struct CrossBodyCollisionSystem : ISystem
                 GlobalIsSurface = globalIsSurface,
                 BodyCenters = bodyCenters,
                 BodyRadii = bodyRadii,
+                BodyIsCloth = bodyIsCloth,
                 HashMap = hashMap,
                 GlobalCorrections = globalCorrections,
                 CellSize = cellSize,
@@ -313,6 +320,7 @@ public partial struct CrossBodyCollisionSystem : ISystem
         hashMap.Dispose();
         bodyCenters.Dispose();
         bodyRadii.Dispose();
+        bodyIsCloth.Dispose();
 
         clothEntitiesList.Dispose();
         softBodyEntities.Dispose();

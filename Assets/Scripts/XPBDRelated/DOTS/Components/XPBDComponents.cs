@@ -120,6 +120,29 @@ public struct XPBDDistanceLambda : IBufferElementData
     public float Value;
 }
 
+// ============================================================================
+// 图着色（Graph Coloring）相关 Buffer
+// 说明：当启用图着色并行方案时，Spawner 会先对 XPBDEdge / Tetrahedron 做
+//       贪心染色并按颜色重排：同一颜色组内的约束互不共享粒子，
+//       可以安全地用 IJobParallelFor 并行求解。
+//       XPBDEdgeColorRange 的每个元素表示一个颜色组在 XPBDEdge Buffer 中的
+//       [Start, Start+Count) 连续区间。
+// ============================================================================
+[InternalBufferCapacity(0)]
+public struct XPBDEdgeColorRange : IBufferElementData
+{
+    public int Start;
+    public int Count;
+}
+
+// 四面体体积约束的颜色分组区间（软体专属）
+[InternalBufferCapacity(0)]
+public struct SoftBodyTetColorRange : IBufferElementData
+{
+    public int Start;
+    public int Count;
+}
+
 [InternalBufferCapacity(0)]
 public struct TriangleIndex : IBufferElementData
 {
@@ -185,6 +208,10 @@ public struct ClothSolverConfig : IComponentData
     public bool SkipAnalyticalCollision;
     public bool SkipCrossBodyCollision;
 
+    // 是否使用基于图着色的并行距离约束求解。
+    // 开启前 Spawner 必须对 XPBDEdge 按颜色重排并填充 XPBDEdgeColorRange Buffer。
+    public bool UseGraphColoring;
+
     // === 向后兼容字段（旧代码 cfg.NumParticles / cfg.Gravity 等写法依然可用） ===
     public int NumParticles { get => Base.NumParticles; set => Base.NumParticles = value; }
     public int NumSubSteps { get => Base.NumSubSteps; set => Base.NumSubSteps = value; }
@@ -221,6 +248,11 @@ public struct SoftBodySolverConfig : IComponentData
 {
     public XPBDBaseConfig Base;
     public float VolumeStiffness;
+
+    // 是否使用基于图着色的并行约束求解（距离 + 体积都会启用）。
+    // 开启前 Spawner 必须对 XPBDEdge / Tetrahedron 按颜色重排，
+    // 并分别填充 XPBDEdgeColorRange / SoftBodyTetColorRange。
+    public bool UseGraphColoring;
 
     // === 向后兼容字段 ===
     public int NumParticles { get => Base.NumParticles; set => Base.NumParticles = value; }
