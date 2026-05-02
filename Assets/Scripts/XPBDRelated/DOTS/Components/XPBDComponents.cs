@@ -27,6 +27,17 @@ public struct ParticleInvMass : IBufferElementData
 }
 
 
+// 粒子是否为"表面粒子"：仅表面粒子参与跨体碰撞（CrossBodyCollisionSystem）。
+// - 布料：所有粒子都是表面（Value=1）
+// - 软体：仅真正处于表面的顶点（属于任一表面三角形）为 1，内部粒子为 0
+// 不加该 Buffer 的实体（Rope 等）在跨体碰撞里视作全表面。
+[InternalBufferCapacity(0)]
+public struct ParticleSurfaceFlag : IBufferElementData
+{
+    public byte Value; // 0 = 内部 / 不参与跨体碰撞，1 = 表面
+}
+
+
 [InternalBufferCapacity(0)]
 public struct GhostPosition : IBufferElementData
 {

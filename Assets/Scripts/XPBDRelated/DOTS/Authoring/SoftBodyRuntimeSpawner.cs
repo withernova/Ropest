@@ -43,7 +43,7 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
 
     [Header("渲染网格细分")]
     [Tooltip("渲染网格细分迭代次数（0=不细分直接用模拟网格，1=4倍面数，2=16倍面数）")]
-    [Range(0, 3)] public int renderSubdivisionIterations = 1;
+    [Range(0, 3)] public int renderSubdivisionIterations = 2;
 
     [Header("固定点")]
     [Tooltip("固定的顶点索引列表（invMass设为0）")]
@@ -198,6 +198,7 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
             typeof(ParticlePrevPosition),
             typeof(ParticleVelocity),
             typeof(ParticleInvMass),
+            typeof(ParticleSurfaceFlag),
             typeof(XPBDEdge),
             typeof(XPBDDistanceLambda),
             typeof(Tetrahedron),
@@ -231,6 +232,15 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
         var prevBuf = entityManager.GetBuffer<ParticlePrevPosition>(softBodyEntity);
         var velBuf = entityManager.GetBuffer<ParticleVelocity>(softBodyEntity);
         var massBuf = entityManager.GetBuffer<ParticleInvMass>(softBodyEntity);
+        var surfaceFlagBuf = entityManager.GetBuffer<ParticleSurfaceFlag>(softBodyEntity);
+
+        // 根据表面三角形索引，计算每个粒子是否属于"表面"（任一表面三角形的顶点）
+        var surfaceFlags = new byte[numParticles];
+        for (int i = 0; i < surfaceTriangles.Length; i++)
+        {
+            int vi = surfaceTriangles[i];
+            if (vi >= 0 && vi < numParticles) surfaceFlags[vi] = 1;
+        }
 
         for (int i = 0; i < numParticles; i++)
         {
@@ -239,6 +249,7 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
             prevBuf.Add(new ParticlePrevPosition { Value = pos });
             velBuf.Add(new ParticleVelocity { Value = float3.zero });
             massBuf.Add(new ParticleInvMass { Value = invMasses[i] });
+            surfaceFlagBuf.Add(new ParticleSurfaceFlag { Value = surfaceFlags[i] });
         }
 
         // 边数据

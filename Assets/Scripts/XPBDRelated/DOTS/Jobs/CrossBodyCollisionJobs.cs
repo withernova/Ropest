@@ -4,10 +4,78 @@ using Unity.Jobs;
 using Unity.Mathematics;
 
 
+// 计算每个 body 的粒子质心（表面粒子优先）以及"有效半径"（表面粒子到质心的最大距离）。
+// 单线程 IJob：body 数一般很少（< 20），O(N) 累加。
+[BurstCompile]
+public struct ComputeBodyCentersJob : IJob
+{
+    [ReadOnly] public NativeArray<float3> GlobalPositions;
+    [ReadOnly] public NativeArray<int> GlobalBodyIds;
+    [ReadOnly] public NativeArray<byte> GlobalIsSurface;
+    public int TotalParticles;
+
+    public NativeArray<float3> BodyCenters;
+    // 每个 body 的"有效外接半径"：表面粒子到质心距离的最大值。
+    // 用于 body 级 shell 约束：若 |posI - otherCenter| < otherRadius + rI，则说明 i 被 other 的外壳包住，
+    // 需要被推到 (otherCenter + normalize(posI - otherCenter) * (otherRadius + rI))
+    public NativeArray<float> BodyRadii;
+
+    public void Execute()
+    {
+        int numBodies = BodyCenters.Length;
+
+        var sumSurf = new NativeArray<float3>(numBodies, Allocator.Temp);
+        var cntSurf = new NativeArray<int>(numBodies, Allocator.Temp);
+        var sumAll = new NativeArray<float3>(numBodies, Allocator.Temp);
+        var cntAll = new NativeArray<int>(numBodies, Allocator.Temp);
+
+        // 第一遍：累加
+        for (int i = 0; i < TotalParticles; i++)
+        {
+            int b = GlobalBodyIds[i];
+            if (b < 0 || b >= numBodies) continue;
+            float3 p = GlobalPositions[i];
+            sumAll[b] += p;
+            cntAll[b]++;
+            if (GlobalIsSurface[i] != 0)
+            {
+                sumSurf[b] += p;
+                cntSurf[b]++;
+            }
+        }
+
+        for (int b = 0; b < numBodies; b++)
+        {
+            if (cntSurf[b] > 0) BodyCenters[b] = sumSurf[b] / cntSurf[b];
+            else if (cntAll[b] > 0) BodyCenters[b] = sumAll[b] / cntAll[b];
+            else BodyCenters[b] = float3.zero;
+
+            BodyRadii[b] = 0f;
+        }
+
+        // 第二遍：算每个 body 的最大表面粒子到质心距离
+        for (int i = 0; i < TotalParticles; i++)
+        {
+            if (GlobalIsSurface[i] == 0) continue;
+            int b = GlobalBodyIds[i];
+            if (b < 0 || b >= numBodies) continue;
+            float d = math.distance(GlobalPositions[i], BodyCenters[b]);
+            if (d > BodyRadii[b]) BodyRadii[b] = d;
+        }
+
+        sumSurf.Dispose();
+        cntSurf.Dispose();
+        sumAll.Dispose();
+        cntAll.Dispose();
+    }
+}
+
 [BurstCompile]
 public struct BuildCrossBodyHashJob : IJobParallelFor
 {
     [ReadOnly] public NativeArray<float3> GlobalPositions;
+    // 所有粒子都写入哈希（包括软体内部粒子），保证穿透总能被检测到
+    [ReadOnly] public NativeArray<byte> GlobalIsSurface;
     public NativeParallelMultiHashMap<int, int>.ParallelWriter HashMap;
     public float CellSize;
 
@@ -31,9 +99,14 @@ public struct BuildCrossBodyHashJob : IJobParallelFor
 public struct CrossBodyCollisionResolveJob : IJobParallelFor
 {
     [ReadOnly] public NativeArray<float3> GlobalPositions;
+    [ReadOnly] public NativeArray<float3> GlobalPrevPositions;
     [ReadOnly] public NativeArray<float> GlobalInvMasses;
     [ReadOnly] public NativeArray<float> GlobalRadii;
     [ReadOnly] public NativeArray<int> GlobalBodyIds;
+    [ReadOnly] public NativeArray<byte> GlobalIsSurface;
+    [ReadOnly] public NativeArray<float3> BodyCenters;
+    // 每个 body 的有效半径（表面粒子最大到质心距离）
+    [ReadOnly] public NativeArray<float> BodyRadii;
     [ReadOnly] public NativeParallelMultiHashMap<int, int> HashMap;
 
     public NativeArray<float3> GlobalCorrections;
@@ -43,8 +116,30 @@ public struct CrossBodyCollisionResolveJob : IJobParallelFor
     // 单次迭代单个粒子的最大修正幅度 = MaxCorrectionRatio * (rI + rJ)
     public float MaxCorrectionRatio;
 
+    // === 核心思路：body 级 shell 约束 + 粒子级 overlap，取两者较大修正 ===
+    //
+    // 问题回顾：之前只用粒子-粒子 overlap 求解，
+    // 球 A 半个球穿入 B 时，A 的表面粒子 i 的邻域里全是 B 的内部粒子，
+    // 粒子级 overlap 最多 ~minDist=rI+rJ（例如 0.32），但要把 i 推出 B 需要走 ~球半径 0.4 米，
+    // 8 次迭代的上限也才 ~8*0.5*0.32 = 1.28 米，虽然理论够，但每次要搜到最深邻居且迭代是渐进的，
+    // 实际很难把深穿透解开。
+    //
+    // 新增：body 级 shell 约束
+    //   - 只要 i 是对方 body 的"外接球"内点（|posI - otherCenter| < otherRadius + rI），
+    //     就直接把 i 推到外接球表面：newPos = otherCenter + normalize(posI - otherCenter) * (otherRadius + rI)
+    //   - 这个约束对"半球穿入"尤其有效——它一次就能把 i 推到 B 真正的外缘，不再依赖邻居搜索。
+    //   - 对浅接触（粒子级 overlap 已足够）也无害：粒子级修正可能更大，取较大者。
+    //
+    // 为什么不会破坏形变：shell 约束只把 i 推到"对方的最外表面"，之后靠本身的距离/体积约束恢复形状。
+
     public void Execute(int i)
     {
+        if (GlobalIsSurface[i] == 0)
+        {
+            GlobalCorrections[i] = float3.zero;
+            return;
+        }
+
         float wI = GlobalInvMasses[i];
         if (wI <= 0f)
         {
@@ -53,6 +148,7 @@ public struct CrossBodyCollisionResolveJob : IJobParallelFor
         }
 
         float3 posI = GlobalPositions[i];
+        float3 prevPosI = GlobalPrevPositions[i];
         int bodyI = GlobalBodyIds[i];
         float rI = GlobalRadii[i];
 
@@ -61,18 +157,18 @@ public struct CrossBodyCollisionResolveJob : IJobParallelFor
         int cy = (int)math.floor(posI.y * invCell);
         int cz = (int)math.floor(posI.z * invCell);
 
-        // === 重写：单次迭代只处理"最深穿透"的那个邻居 ===
-        // 为什么：之前尝试过"每轴取最大绝对值"→ 方向混乱导致发散；"加权平均法线"→ 
-        //        多邻居方向冲突时幅度不足导致穿透/吸引。都不如最朴素的做法：
-        // 本次迭代只采纳单个最深穿透邻居的推开向量，多邻居通过多次迭代自然收敛。
-        // 这是 Unity Physics / PhysX / Bullet 都使用的"sequential impulse"思路的位置版。
-        // —— 单邻居方向是真实接触法向，没有任何"合成误差"；
-        // —— 多邻居冲突？下一次迭代会选择到当前最深的那个；
-        // —— 配合 NumIterations=6+，足以让所有接触都被逐个解开。
+        // === 遍历邻域，找最深"粒子级 overlap"，同时记录所有遇到的对方 body（用于 shell 约束）===
+        float maxOverlap = 0f;
+        float maxOverlapMinDist = 0f;
+        int deepestJ = -1;
+        int deepestBody = -1;
+        float shareIForMax = 0.5f;
 
-        float3 deepestCorr = float3.zero;
-        float deepestOverlap = 0f;
-        float deepestMinDist = 0f;
+        // 用位图/简单数组记录邻域内遇到的对方 body（body 数最多 ~32 足够）
+        // 记录前 4 个对方 body 即可，罕见情况下 i 同时接触 >4 个 body 时只处理前 4 个
+        const int kMaxNearbyBodies = 4;
+        int nearbyCount = 0;
+        var nearbyBodies = new int4(-1, -1, -1, -1);
 
         for (int dx = -1; dx <= 1; dx++)
         {
@@ -81,18 +177,16 @@ public struct CrossBodyCollisionResolveJob : IJobParallelFor
                 for (int dz = -1; dz <= 1; dz++)
                 {
                     int hash = (cx + dx) * 73856093 ^ (cy + dy) * 19349663 ^ (cz + dz) * 83492791;
-
                     if (!HashMap.TryGetFirstValue(hash, out int j, out var it)) continue;
-
                     do
                     {
                         if (j == i) continue;
-                        if (GlobalBodyIds[j] == bodyI) continue;
+                        int bodyJ = GlobalBodyIds[j];
+                        if (bodyJ == bodyI) continue;
 
                         float wJ = GlobalInvMasses[j];
                         if (wI + wJ < 1e-8f) continue;
 
-                        // 跨体修正权重：双方都能动 → 本侧 0.5；对方固定 → 本侧 1.0
                         float shareI = (wJ > 0f) ? 0.5f : 1.0f;
 
                         float rJ = GlobalRadii[j];
@@ -103,54 +197,149 @@ public struct CrossBodyCollisionResolveJob : IJobParallelFor
                         float distSq = math.lengthsq(diff);
                         if (distSq >= minDistSq) continue;
 
-                        float3 dir;
-                        float overlap;
-
-                        if (distSq < 1e-12f)
+                        // 记录邻域对方 body
+                        bool known =
+                            (nearbyBodies.x == bodyJ) ||
+                            (nearbyBodies.y == bodyJ) ||
+                            (nearbyBodies.z == bodyJ) ||
+                            (nearbyBodies.w == bodyJ);
+                        if (!known && nearbyCount < kMaxNearbyBodies)
                         {
-                            // 退化：两点重合。用稳定的确定性方向避免同向弹飞
-                            int seed = (i - j);
-                            dir = math.normalize(new float3(
-                                ((seed * 12.9898f) % 1f) - 0.5f,
-                                ((seed * 78.2330f) % 1f) - 0.5f + 0.1f,
-                                ((seed * 37.7190f) % 1f) - 0.5f));
-                            overlap = minDist;
-                        }
-                        else
-                        {
-                            float dist = math.sqrt(distSq);
-                            dir = diff / dist;
-                            overlap = minDist - dist;
+                            if (nearbyCount == 0) nearbyBodies.x = bodyJ;
+                            else if (nearbyCount == 1) nearbyBodies.y = bodyJ;
+                            else if (nearbyCount == 2) nearbyBodies.z = bodyJ;
+                            else nearbyBodies.w = bodyJ;
+                            nearbyCount++;
                         }
 
-                        // 只记录最深的那个
-                        if (overlap > deepestOverlap)
-                        {
-                            deepestOverlap = overlap;
-                            deepestCorr = dir * (shareI * overlap);
-                            deepestMinDist = minDist;
-                        }
+                        float dist = (distSq < 1e-12f) ? 0f : math.sqrt(distSq);
+                        float overlap = minDist - dist;
 
+                        if (overlap > maxOverlap)
+                        {
+                            maxOverlap = overlap;
+                            maxOverlapMinDist = minDist;
+                            shareIForMax = shareI;
+                            deepestJ = j;
+                            deepestBody = bodyJ;
+                        }
                     } while (HashMap.TryGetNextValue(out j, ref it));
                 }
             }
         }
 
-        if (deepestOverlap <= 0f)
+        if (nearbyCount == 0)
         {
             GlobalCorrections[i] = float3.zero;
             return;
         }
 
-        // 单次迭代幅度限幅（防止初始大穿透一步跳太远）
-        float maxLen = MaxCorrectionRatio * deepestMinDist;
-        float corrLen = math.length(deepestCorr);
-        if (corrLen > maxLen && corrLen > 1e-8f)
+        // === 从接触到的每个对方 body 取 shell 约束，选"推开量最大"的那个 ===
+        // Shell 约束（仅对"明显穿入 body 内部"的场景生效）：
+        //   若 |posI - otherCenter| < otherRadius，说明 i 已在对方 body 的外接球内部，
+        //   直接把 i 推到外接球表面 (otherCenter + dir * otherRadius)。
+        //   推开量 shellPush = otherRadius - |posI - otherCenter|。
+        //
+        // 注意：targetDist = otherRadius（不是 otherRadius + rI），
+        //   因为两球表面刚接触时 i 大约就在对方球表面外，我们不希望把 i 多推一个 rI，
+        //   那种浅接触由粒子级 overlap 精确处理即可。
+        float bestShellPush = 0f;
+        float3 bestShellDir = float3.zero;
+        int bestShellBody = -1;
+
+        for (int k = 0; k < nearbyCount; k++)
         {
-            deepestCorr *= (maxLen / corrLen);
+            int b;
+            if (k == 0) b = nearbyBodies.x;
+            else if (k == 1) b = nearbyBodies.y;
+            else if (k == 2) b = nearbyBodies.z;
+            else b = nearbyBodies.w;
+            if (b < 0) continue;
+
+            float3 oCenter = BodyCenters[b];
+            float oRadius = BodyRadii[b];
+            float targetDist = oRadius; // i 应该在对方 body 外接球之外
+
+            float3 dCenter = posI - oCenter;
+            float dLenSq = math.lengthsq(dCenter);
+            if (dLenSq >= targetDist * targetDist) continue; // 未穿入 shell
+
+            float dLen = (dLenSq < 1e-12f) ? 0f : math.sqrt(dLenSq);
+            float shellPush = targetDist - dLen;
+            if (shellPush > bestShellPush)
+            {
+                bestShellPush = shellPush;
+                bestShellBody = b;
+                if (dLen > 1e-6f)
+                {
+                    bestShellDir = dCenter / dLen;
+                }
+                else
+                {
+                    // i 恰好在对方质心上：用前一帧方向兜底，否则伪随机
+                    bestShellDir = float3.zero;
+                }
+            }
         }
 
-        GlobalCorrections[i] = deepestCorr;
+        // === 选择最终的修正量：body shell 修正通常比粒子级大（半球穿透时尤其明显），
+        //     粒子级修正在浅接触时更精确，取两者较大者沿对应方向推开 ===
+        float3 finalCorr = float3.zero;
+
+        // 粒子级修正：沿 "对方质心 → i" 方向，幅度为粒子最深 overlap × shareI
+        if (maxOverlap > 0f && deepestBody >= 0)
+        {
+            float3 oCenter = BodyCenters[deepestBody];
+            float3 dCenter = posI - oCenter;
+            float dLenSq = math.lengthsq(dCenter);
+            float3 dir;
+            if (dLenSq > 1e-10f)
+            {
+                dir = dCenter * math.rsqrt(dLenSq);
+            }
+            else
+            {
+                float3 refDiff = prevPosI - GlobalPrevPositions[deepestJ];
+                float refLenSq = math.lengthsq(refDiff);
+                if (refLenSq > 1e-12f) dir = refDiff * math.rsqrt(refLenSq);
+                else
+                {
+                    int seed = (i - deepestJ);
+                    dir = math.normalize(new float3(
+                        ((seed * 12.9898f) % 1f) - 0.5f,
+                        ((seed * 78.2330f) % 1f) - 0.5f + 0.1f,
+                        ((seed * 37.7190f) % 1f) - 0.5f));
+                }
+            }
+            float partMag = shareIForMax * maxOverlap;
+            float partCap = MaxCorrectionRatio * maxOverlapMinDist;
+            if (partMag > partCap) partMag = partCap;
+            finalCorr = dir * partMag;
+        }
+
+        // body shell 修正：如果 shell 推开量大于粒子级幅度，替换为 shell 方案
+        if (bestShellBody >= 0 && bestShellPush > math.length(finalCorr))
+        {
+            float3 dir = bestShellDir;
+            if (math.lengthsq(dir) < 1e-10f)
+            {
+                // 方向退化：用 prev 位置兜底
+                float3 refDir = prevPosI - BodyCenters[bestShellBody];
+                float rl = math.lengthsq(refDir);
+                if (rl > 1e-12f) dir = refDir * math.rsqrt(rl);
+                else dir = new float3(0, 1, 0);
+            }
+            // shell 修正同样走 shareI=0.5（双方都是动态粒子时，每边只走一半；
+            // 对方 i_opposite 也会跑这套逻辑，最终两球相互推到 shell 交界）
+            // 注意 shell 修正是单方向的：i 到 othershell 的距离，i 走 0.5 份即可
+            float shellMag = 0.5f * bestShellPush;
+            // shell 修正的上限略宽松：允许一次最多推 2 个 minDist（body 级别需要更快解穿透）
+            float shellCap = 2.0f * (rI * 2f);
+            if (shellMag > shellCap) shellMag = shellCap;
+            finalCorr = dir * shellMag;
+        }
+
+        GlobalCorrections[i] = finalCorr;
     }
 }
 

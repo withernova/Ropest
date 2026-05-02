@@ -15,7 +15,7 @@ namespace BasketballGame
         [Tooltip("布料升起区域半径（随机位置的散布范围，XZ平面）")]
         public float targetAreaRadius = 6f;
         [Tooltip("布料升起的高度下限（相对 targetAreaCenter.y）")]
-        public float clothRiseHeightMin = 3f;
+        public float clothRiseHeightMin = 5f;
         [Tooltip("布料升起的高度上限（相对 targetAreaCenter.y）。每张布料在 [Min, Max] 间随机一个高度")]
         public float clothRiseHeightMax = 7f;
 

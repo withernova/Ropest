@@ -127,19 +127,35 @@ public partial struct CrossBodyCollisionSystem : ISystem
             return;
         }
 
-        // === 分配全局扁平数组 ===
+        // === 分配全局扇平数组 ===
         var globalPositions = new NativeArray<float3>(totalParticles, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+        var globalPrevPositions = new NativeArray<float3>(totalParticles, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
         var globalInvMasses = new NativeArray<float>(totalParticles, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
         var globalRadii = new NativeArray<float>(totalParticles, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
         var globalBodyIds = new NativeArray<int>(totalParticles, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+        // 是否为表面粒子（1=表面，参与跨体碰撞；0=内部，跳过）
+        var globalIsSurface = new NativeArray<byte>(totalParticles, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
         var globalCorrections = new NativeArray<float3>(totalParticles, Allocator.TempJob, NativeArrayOptions.ClearMemory);
+
+        // === 每个 body 的粒子质心（每轮迭代重新计算）===
+        // 质心用于"远离对方 body 整体中心"的方向参考：当一个粒子严重穿进对方球内时，
+        // 基于粒子-粒子连线的 dir 可能指向对方更深处（错方向），但基于粒子-对方质心的 dir
+        // 永远指向球外，这才是稳健的分离方向。
+        var bodyCenters = new NativeArray<float3>(totalBodies, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+        // 每个 body 的"有效外接半径"（表面粒子到质心的最大距离），用于 body 级 shell 碰撞约束
+        var bodyRadii = new NativeArray<float>(totalBodies, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
 
         // === 1. 主线程收集：把所有实体的 Buffer 数据拷到全局数组 ===
         for (int i = 0; i < numCloth; i++)
         {
             var entity = clothEntities[i];
             var posBuf = state.EntityManager.GetBuffer<ParticlePosition>(entity, true);
+            var prevBuf = state.EntityManager.GetBuffer<ParticlePrevPosition>(entity, true);
             var invMassBuf = state.EntityManager.GetBuffer<ParticleInvMass>(entity, true);
+            // 布料全部粒子视为表面（若没有 ParticleSurfaceFlag Buffer 也按表面处理）
+            bool hasFlagBuf = state.EntityManager.HasBuffer<ParticleSurfaceFlag>(entity);
+            DynamicBuffer<ParticleSurfaceFlag> flagBuf = default;
+            if (hasFlagBuf) flagBuf = state.EntityManager.GetBuffer<ParticleSurfaceFlag>(entity, true);
             int num = sizes[i];
             int off = offsets[i];
             float r = radii[i];
@@ -147,9 +163,12 @@ public partial struct CrossBodyCollisionSystem : ISystem
             for (int k = 0; k < num; k++)
             {
                 globalPositions[off + k] = posBuf[k].Value;
+                globalPrevPositions[off + k] = prevBuf[k].Value;
                 globalInvMasses[off + k] = invMassBuf[k].Value;
                 globalRadii[off + k] = r;
                 globalBodyIds[off + k] = bid;
+                // 布料默认全部是表面粒子
+                globalIsSurface[off + k] = hasFlagBuf ? flagBuf[k].Value : (byte)1;
             }
         }
         for (int i = 0; i < numSoft; i++)
@@ -157,7 +176,12 @@ public partial struct CrossBodyCollisionSystem : ISystem
             int idx = numCloth + i;
             var entity = softBodyEntities[i];
             var posBuf = state.EntityManager.GetBuffer<ParticlePosition>(entity, true);
+            var prevBuf = state.EntityManager.GetBuffer<ParticlePrevPosition>(entity, true);
             var invMassBuf = state.EntityManager.GetBuffer<ParticleInvMass>(entity, true);
+            // 软体：只有表面粒子（ParticleSurfaceFlag.Value==1）参与跨体碰撞
+            bool hasFlagBuf = state.EntityManager.HasBuffer<ParticleSurfaceFlag>(entity);
+            DynamicBuffer<ParticleSurfaceFlag> flagBuf = default;
+            if (hasFlagBuf) flagBuf = state.EntityManager.GetBuffer<ParticleSurfaceFlag>(entity, true);
             int num = sizes[idx];
             int off = offsets[idx];
             float r = radii[idx];
@@ -165,12 +189,14 @@ public partial struct CrossBodyCollisionSystem : ISystem
             for (int k = 0; k < num; k++)
             {
                 globalPositions[off + k] = posBuf[k].Value;
+                globalPrevPositions[off + k] = prevBuf[k].Value;
                 globalInvMasses[off + k] = invMassBuf[k].Value;
                 globalRadii[off + k] = r;
                 globalBodyIds[off + k] = bid;
+                // 没有标记 Buffer 时退化为全表面（向后兼容，但建议旧软体重建一次）
+                globalIsSurface[off + k] = hasFlagBuf ? flagBuf[k].Value : (byte)1;
             }
         }
-
         // 原始位置快照
         var originalPositions = new NativeArray<float3>(globalPositions, Allocator.TempJob);
 
@@ -188,20 +214,37 @@ public partial struct CrossBodyCollisionSystem : ISystem
             iterHandle.Complete();
             hashMap.Clear();
 
+            // 每轮都重算 body 质心（迭代过程中粒子在动，质心也随之变化）
+            var centerJob = new ComputeBodyCentersJob
+            {
+                GlobalPositions = globalPositions,
+                GlobalBodyIds = globalBodyIds,
+                GlobalIsSurface = globalIsSurface,
+                TotalParticles = totalParticles,
+                BodyCenters = bodyCenters,
+                BodyRadii = bodyRadii
+            };
+            iterHandle = centerJob.Schedule();
+
             var buildHashJob = new BuildCrossBodyHashJob
             {
                 GlobalPositions = globalPositions,
+                GlobalIsSurface = globalIsSurface,
                 HashMap = hashMap.AsParallelWriter(),
                 CellSize = cellSize
             };
-            iterHandle = buildHashJob.Schedule(totalParticles, kBatchSize);
+            iterHandle = buildHashJob.Schedule(totalParticles, kBatchSize, iterHandle);
 
             var resolveJob = new CrossBodyCollisionResolveJob
             {
                 GlobalPositions = globalPositions,
+                GlobalPrevPositions = globalPrevPositions,
                 GlobalInvMasses = globalInvMasses,
                 GlobalRadii = globalRadii,
                 GlobalBodyIds = globalBodyIds,
+                GlobalIsSurface = globalIsSurface,
+                BodyCenters = bodyCenters,
+                BodyRadii = bodyRadii,
                 HashMap = hashMap,
                 GlobalCorrections = globalCorrections,
                 CellSize = cellSize,
@@ -260,12 +303,16 @@ public partial struct CrossBodyCollisionSystem : ISystem
 
         // === 清理 ===
         globalPositions.Dispose();
+        globalPrevPositions.Dispose();
         originalPositions.Dispose();
         globalInvMasses.Dispose();
         globalRadii.Dispose();
         globalBodyIds.Dispose();
+        globalIsSurface.Dispose();
         globalCorrections.Dispose();
         hashMap.Dispose();
+        bodyCenters.Dispose();
+        bodyRadii.Dispose();
 
         clothEntitiesList.Dispose();
         softBodyEntities.Dispose();
@@ -275,21 +322,20 @@ public partial struct CrossBodyCollisionSystem : ISystem
         frictions.Dispose();
     }
 
-    // 彻底重写速度处理逻辑：
-    // === 关键洞察 ===
-    // 前面版本错在"手工维护速度"——先算 baseVel，再减去 velFromCorr，再加 relax*velFromCorr，
-    // 再限幅。这一堆操作的语义混乱：当粒子被推开（corr 朝外），位置变了但 prev 没变，
-    // 意味着 (newPos - prev)/dt 自然包含了"分离速度"，这才是物理上正确的速度。
-    // 再去"velocityRelaxation * velFromCorr"反而会抵消掉这个分离趋势 → 看起来像吸引。
+    // === 方案 A：显式拆分法向/切向并钳制"朝向对方"的入射速度 ===
     //
-    // === 新策略（标准 XPBD 做法）===
-    // 1. 位置修正：newPos = oldPos + corr ⇒ 直接写 posBuf
-    // 2. prev 不动（非摩擦情况下）⇒ (newPos - prev)/dt 天然产生分离速度
-    // 3. 摩擦：把 prev 沿切向朝 newPos 拉近一个比例 friction
-    //    ⇒ 结果是切向速度衰减 (1 - friction) 倍，法向速度完全保留
-    // 4. velBuf 就写 (newPos - prev)/dt，不做任何限幅、松弛
+    // 旧做法 finalVel = (newPos - prev)/dt 的问题：
+    //   prev 是帧初位置，当入射速度巨大时 (oldPos - prev) 方向朝对方，其分量可能远大于 corr，
+    //   导致 finalVel 仍朝对方 → 下一帧 PreSolve 又穿进去 → 视觉上"相互吸引/黏着"。
     //
-    // 这是最朴素、物理最正确的做法；不再有"粒子吸引"，穿透也能被正常顶开。
+    // 新做法（基于 PostSolve 已写好的 velBuf）：
+    //   1. 取出 PostSolve 的速度 oldVel，沿 normal=corr/|corr| 分解为 vn（法向）、vt（切向）
+    //   2. 法向：如果粒子仍朝对方（vn < 0，朝着 -normal 方向=对方方向），钳制到至少分离速度 corrLen/dt；
+    //      如果已经在远离（vn >= 0），保留原速度（不要"加"分离速度，避免加速抛飞）
+    //   3. 切向：按摩擦系数衰减 vt *= (1 - friction)
+    //   4. finalVel = vt + vnNew * normal
+    //   5. 反推 prev = newPos - finalVel * dt，让 (newPos - prev)/dt 与 finalVel 自洽，
+    //      下一帧 PreSolve 读取 vel 后位置积分正确，不会再撞回去。
     private static void ScatterBackToBuffer(
         DynamicBuffer<ParticlePosition> posBuf,
         DynamicBuffer<ParticlePrevPosition> prevBuf,
@@ -316,30 +362,35 @@ public partial struct CrossBodyCollisionSystem : ISystem
                 if (corrLen > maxCorrLen) maxCorrLen = corrLen;
             }
 
-            // 1. 应用位置修正（posBuf[k] 可能已经被 PostSolve 写过 newPos，
-            //    这里的 corr 是 "相对 originalPositions[gi] 的偏移"，要叠加到当前 posBuf 上）
+            // 1. 应用位置修正
             float3 oldPos = posBuf[k].Value;
             float3 newPos = oldPos + corr;
             posBuf[k] = new ParticlePosition { Value = newPos };
 
-            // 2. 摩擦：prev 沿切向被朝 newPos 拉近（衰减切向速度）
-            //    注意：法向上 prev 完全不动 → 法向速度 (newPos - prev)/dt 包含了分离趋势 → 不会"吸引"
-            float3 prev = prevBuf[k].Value;
-            if (friction > 0f)
-            {
-                float3 normal = corr / corrLen;
-                float3 disp = newPos - prev;
-                float tangDotN = math.dot(disp, normal);
-                float3 tangent = disp - tangDotN * normal;
-                float fric = math.saturate(friction);
-                prev += tangent * fric;
-                prevBuf[k] = new ParticlePrevPosition { Value = prev };
-            }
+            // 2. 以 PostSolve 写好的速度为基准做法向/切向重组
+            float3 normal = corr / corrLen;   // 指向远离对方（分离方向）
+            float3 oldVel = velBuf[k].Value;
+            float vn = math.dot(oldVel, normal);           // 法向分量：>0 分离，<0 朝对方
+            float3 vt = oldVel - vn * normal;              // 切向分量
 
-            // 3. 速度 = (newPos - prev) / dt —— 纯物理推导，不做任何人为限幅/松弛
-            //    这样：沿法向 corr → 产生朝外的分离速度 ✓
-            //          沿切向摩擦 → 产生衰减的切向速度 ✓
-            float3 finalVel = (newPos - prev) * invDt;
+            // 3. 法向钳制：
+            //    - 如果 vn < 0（朝对方）→ 抹掉入射速度，替换为 corrLen/dt 的分离速度
+            //    - 如果 0 <= vn < corrLen/dt → 提升到 corrLen/dt 保证能分离
+            //    - 如果 vn 已经 >= corrLen/dt → 保留原值
+            float vnSeparation = corrLen * invDt;
+            float vnNew = math.max(vn, vnSeparation);
+
+            // 4. 切向摩擦：标准 (1 - friction) 衰减
+            float fric = math.saturate(friction);
+            vt *= (1f - fric);
+
+            float3 finalVel = vt + vnNew * normal;
+
+            // 5. 反推 prev 保证 (newPos - prev)/dt == finalVel，
+            //    这样下一帧 PreSolve 写入的 PrevPositions = Positions 之前，
+            //    Damping 等对 prev 的假设依然成立，且不存在"残留的入射速度"。
+            float3 newPrev = newPos - finalVel * dt;
+            prevBuf[k] = new ParticlePrevPosition { Value = newPrev };
             velBuf[k] = new ParticleVelocity { Value = finalVel };
         }
     }
