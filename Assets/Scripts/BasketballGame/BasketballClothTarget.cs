@@ -45,6 +45,7 @@ namespace BasketballGame
         // 运行时
         private ClothRuntimeSpawner _spawner;
         private EntityManager _em;
+        private bool _emReady;
         private Entity _cachedEntity = Entity.Null;
         private Vector3 _startWorldOrigin;
         private Vector3 _targetWorldOrigin;
@@ -116,6 +117,16 @@ namespace BasketballGame
             if (World.DefaultGameObjectInjectionWorld != null)
             {
                 _em = World.DefaultGameObjectInjectionWorld.EntityManager;
+                _emReady = true;
+                // 包含我们在 LateUpdate 要读/写的所有 Buffer 类型。
+                // CompleteDependency() 会把当前挂在这些类型上的仰赖的仿真 Job 全等完，
+                // 之后主线程 GetBuffer 就不会触发安全校验异常。
+                _simDepQuery = _em.CreateEntityQuery(
+                    ComponentType.ReadWrite<ParticlePosition>(),
+                    ComponentType.ReadWrite<ParticlePrevPosition>(),
+                    ComponentType.ReadWrite<ParticleVelocity>(),
+                    ComponentType.ReadOnly<ParticleInvMass>()
+                );
             }
         }
 
@@ -125,8 +136,18 @@ namespace BasketballGame
             if (gm != null) gm.UnregisterCloth(this);
         }
 
+        // 用于在 LateUpdate 中同步仿真依赖的 Query：
+        // 覆盖我们在主线程要读/写的 Buffer 类型，对它调用 CompleteDependency() 即可
+        // 让 Job System 把这些类型上挂着的仿真 Job 全部等完。
+        private EntityQuery _simDepQuery;
+
         void LateUpdate()
         {
+            // 关键：访问仿真 Buffer 前，先等挂在这些类型上的仿真 Job 完成。
+            // 仿真系统取消循环内 Complete() 后，主线程必须自己同步，
+            // 否则 GetBuffer<ParticlePosition> 会抛 "previously scheduled job writes to ..." 。
+            if (_emReady) _simDepQuery.CompleteDependency();
+
             _lifeTimer += Time.deltaTime;
 
             UpdateAnimation();

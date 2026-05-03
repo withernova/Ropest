@@ -42,6 +42,13 @@ public partial struct SoftBodySimulationSystem : ISystem
 
         for (int e = 0; e < entities.Length; e++)
         {
+            // 必须在进入本实体前，把上一个实体累积到 combinedDependency 上的 Job（含 PostSolve 对
+            // ParticlePosition 的写）等完。否则下面 state.EntityManager.GetBuffer<ParticlePosition>
+            // 会触发 DOTS safety check："previously scheduled job XPBDPostSolveJob writes to..."。
+            //
+            // 注意：这句 Complete 的开销其实很小 —— 它只等上一实体整条 Job 链的尾部 PostSolve；
+            // 真正拖慢帧率的是"小颜色组 Schedule 了 N 次线程唤醒"，那个问题由下面 Run() 主线程
+            // Burst 分支解决，不依赖这里是否同步。
             combinedDependency.Complete();
 
             var entity = entities[e];
@@ -78,6 +85,19 @@ public partial struct SoftBodySimulationSystem : ISystem
             int edgeCount = edges.Length;
             int tetCount = tets.Length;
 
+            // === 图着色相关数据预读（仅读一次，避免子步循环里反复 HasBuffer/GetBuffer） ===
+            bool useColoringEdges = cfg.UseGraphColoring && state.EntityManager.HasBuffer<XPBDEdgeColorRange>(entity);
+            bool useColoringTets  = cfg.UseGraphColoring && state.EntityManager.HasBuffer<SoftBodyTetColorRange>(entity);
+            NativeArray<XPBDEdgeColorRange> edgeColorArr = default;
+            NativeArray<SoftBodyTetColorRange> tetColorArr = default;
+            if (useColoringEdges)
+                edgeColorArr = state.EntityManager.GetBuffer<XPBDEdgeColorRange>(entity).AsNativeArray();
+            if (useColoringTets)
+                tetColorArr = state.EntityManager.GetBuffer<SoftBodyTetColorRange>(entity).AsNativeArray();
+
+            // 并行阈值：颜色组元素 < 该值时，退回主线程 Run()（规避调度/唤醒开销）
+            const int PARALLEL_THRESHOLD = 512;
+
             // === 1. 重置Lambda（共享 XPBDResetFloatBufferJob） ===
             var resetDistJob = new XPBDResetFloatBufferJob { Values = distLambdaArr };
             // 注意：依赖必须接在 combinedDependency 之后，避免多个 SoftBody 实体并行写相同 ComponentType。
@@ -106,15 +126,12 @@ public partial struct SoftBodySimulationSystem : ISystem
             JobHandle constraintHandle = preSolveHandle;
             for (int step = 0; step < baseCfg.NumSubSteps; step++)
             {
-                bool useColoring = cfg.UseGraphColoring;
-
                 // === 距离约束 ===
-                if (useColoring && state.EntityManager.HasBuffer<XPBDEdgeColorRange>(entity))
+                if (useColoringEdges)
                 {
-                    var edgeColorRanges = state.EntityManager.GetBuffer<XPBDEdgeColorRange>(entity);
-                    for (int c = 0; c < edgeColorRanges.Length; c++)
+                    for (int c = 0; c < edgeColorArr.Length; c++)
                     {
-                        int colorCount = edgeColorRanges[c].Count;
+                        int colorCount = edgeColorArr[c].Count;
                         if (colorCount <= 0) continue;
 
                         var distColoredJob = new XPBDDistanceConstraintColoredJob
@@ -125,9 +142,22 @@ public partial struct SoftBodySimulationSystem : ISystem
                             Lambdas = distLambdaArr,
                             Stiffness = baseCfg.DistanceStiffness,
                             Dt = dt,
-                            ColorStart = edgeColorRanges[c].Start
+                            ColorStart = edgeColorArr[c].Start
                         };
-                        constraintHandle = distColoredJob.Schedule(colorCount, 64, constraintHandle);
+
+                        if (colorCount >= PARALLEL_THRESHOLD)
+                        {
+                            int batch = math.max(32, colorCount / 8);
+                            constraintHandle = distColoredJob.Schedule(colorCount, batch, constraintHandle);
+                        }
+                        else
+                        {
+                            // 小颜色组：主线程 Burst Run()，避开 worker 唤醒开销。
+                            // Run 前必须 Complete 前驱依赖，之后 constraintHandle 置空。
+                            constraintHandle.Complete();
+                            distColoredJob.Run(colorCount);
+                            constraintHandle = default;
+                        }
                     }
                 }
                 else
@@ -145,12 +175,11 @@ public partial struct SoftBodySimulationSystem : ISystem
                 }
 
                 // === 体积约束（软体专属） ===
-                if (useColoring && state.EntityManager.HasBuffer<SoftBodyTetColorRange>(entity))
+                if (useColoringTets)
                 {
-                    var tetColorRanges = state.EntityManager.GetBuffer<SoftBodyTetColorRange>(entity);
-                    for (int c = 0; c < tetColorRanges.Length; c++)
+                    for (int c = 0; c < tetColorArr.Length; c++)
                     {
-                        int colorCount = tetColorRanges[c].Count;
+                        int colorCount = tetColorArr[c].Count;
                         if (colorCount <= 0) continue;
 
                         var volColoredJob = new SoftBodyVolumeConstraintColoredJob
@@ -162,9 +191,21 @@ public partial struct SoftBodySimulationSystem : ISystem
                             Lambdas = volLambdaArr,
                             Stiffness = cfg.VolumeStiffness,
                             Dt = dt,
-                            ColorStart = tetColorRanges[c].Start
+                            ColorStart = tetColorArr[c].Start
                         };
-                        constraintHandle = volColoredJob.Schedule(colorCount, 32, constraintHandle);
+
+                        if (colorCount >= PARALLEL_THRESHOLD)
+                        {
+                            int batch = math.max(16, colorCount / 8);
+                            constraintHandle = volColoredJob.Schedule(colorCount, batch, constraintHandle);
+                        }
+                        else
+                        {
+                            // 小颜色组：主线程 Burst Run()，避开 worker 唤醒开销。
+                            constraintHandle.Complete();
+                            volColoredJob.Run(colorCount);
+                            constraintHandle = default;
+                        }
                     }
                 }
                 else

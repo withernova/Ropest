@@ -39,6 +39,12 @@ public partial struct ClothSimulationSystem : ISystem
 
         for (int e = 0; e < entities.Length; e++)
         {
+            // 必须在进入本实体前，把上一实体累积到 combinedDependency 上的 Job等完。
+            // 否则下面 state.EntityManager.GetBuffer<ParticlePosition> 会触发 DOTS safety check：
+            // "previously scheduled job XPBDPostSolveJob writes to..."。
+            //
+            // 注意：这句 Complete 开销很小——它只等上一实体尾部的 PostSolve；
+            // 真正的性能优化点在小颜色组的 Run() 主线程 Burst 分支，而不是这里。
             combinedDependency.Complete();
 
             var entity = entities[e];
@@ -66,6 +72,22 @@ public partial struct ClothSimulationSystem : ISystem
             // 零拷贝获取 Edge Buffer（边数据是静态的，无需每帧重建NativeArray）
             var edgeArr = edges.AsNativeArray();
             int edgeCount = edges.Length;
+
+            // === 图着色相关数据预读（仅读一次，避免在子步循环里反复 HasBuffer/GetBuffer） ===
+            // 若开启图着色但该实体未附带 ColorRange Buffer，自动降级为串行 IJob。
+            bool useColoring = cfg.UseGraphColoring && state.EntityManager.HasBuffer<XPBDEdgeColorRange>(entity);
+            NativeArray<XPBDEdgeColorRange> colorRangeArr = default;
+            if (useColoring)
+            {
+                var colorRanges = state.EntityManager.GetBuffer<XPBDEdgeColorRange>(entity);
+                colorRangeArr = colorRanges.AsNativeArray();
+            }
+
+            // 并行阈值：颜色组内元素少于此值时，"调度 IJobParallelFor"的固定开销会大于
+            // 实际计算收益。小于该阈值时退回到主线程 Run()，避免线程唤醒/SafetyHandle 成本。
+            // 典型 Editor 下单次 Schedule ≈ 5~20μs，一条约束约 30 条浮点指令 (~10ns)，
+            // 因此只有颜色组 ≥ ~512 时并行才能稳定跑赢调度开销。
+            const int PARALLEL_THRESHOLD = 512;
 
             // === 1. 重置Lambda（共享 XPBDResetFloatBufferJob） ===
             var resetJob = new XPBDResetFloatBufferJob
@@ -98,14 +120,14 @@ public partial struct ClothSimulationSystem : ISystem
             {
                 // === 距离约束 ===
                 // 根据开关在两种方案之间切换：
-                //   - 图着色并行：按颜色组串行调度，每组内部用 IJobParallelFor 并行；
+                //   - 图着色并行：按颜色组串行调度，颜色组够大时 IJobParallelFor 并行，
+                //     组较小则 Run() 在主线程执行（规避调度开销）；
                 //   - 串行 IJob：保持旧行为（全部边顺序求解）。
-                if (cfg.UseGraphColoring && state.EntityManager.HasBuffer<XPBDEdgeColorRange>(entity))
+                if (useColoring)
                 {
-                    var colorRanges = state.EntityManager.GetBuffer<XPBDEdgeColorRange>(entity);
-                    for (int c = 0; c < colorRanges.Length; c++)
+                    for (int c = 0; c < colorRangeArr.Length; c++)
                     {
-                        int colorCount = colorRanges[c].Count;
+                        int colorCount = colorRangeArr[c].Count;
                         if (colorCount <= 0) continue;
 
                         var distColoredJob = new XPBDDistanceConstraintColoredJob
@@ -116,9 +138,27 @@ public partial struct ClothSimulationSystem : ISystem
                             Lambdas = lambdaArr,
                             Stiffness = baseCfg.DistanceStiffness,
                             Dt = dt,
-                            ColorStart = colorRanges[c].Start
+                            ColorStart = colorRangeArr[c].Start
                         };
-                        constraintHandle = distColoredJob.Schedule(colorCount, 64, constraintHandle);
+
+                        if (colorCount >= PARALLEL_THRESHOLD)
+                        {
+                            // 够大，走 IJobParallelFor 并行（batchSize 取颜色组大小的 1/8，
+                            // 保证所有 worker 都能拿到一片活）
+                            int batch = math.max(32, colorCount / 8);
+                            constraintHandle = distColoredJob.Schedule(colorCount, batch, constraintHandle);
+                        }
+                        else
+                        {
+                            // 颜色组太小：直接在主线程 Burst 跑整个组。
+                            // IJobParallelFor.Run(n) 会在主线程按 0..n-1 顺序调用 Execute，
+                            // 完全不经 Job Queue / worker 唤醒，适合几十~几百条约束的小颜色组。
+                            // Run 前必须让前驱 Job 完成，因此先 Complete()；
+                            // 之后 constraintHandle 重置为 default 继续累加。
+                            constraintHandle.Complete();
+                            distColoredJob.Run(colorCount);
+                            constraintHandle = default;
+                        }
                     }
                 }
                 else
