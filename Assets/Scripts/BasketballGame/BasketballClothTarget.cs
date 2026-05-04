@@ -148,6 +148,13 @@ namespace BasketballGame
             // 否则 GetBuffer<ParticlePosition> 会抛 "previously scheduled job writes to ..." 。
             if (_emReady) _simDepQuery.CompleteDependency();
 
+            // XPBD 物理暂停时冻结本布料的全部游戏逻辑：
+            // - 不累加 _lifeTimer，避免暂停中 maxLifetime 触发 FallAndDestroy；
+            // - 不推进 Rising/Falling 动画（_animTimer）；
+            // - 不推进进球判定 _stayTimer；
+            // - 不更新 Center（物理没推进，位置没变）。
+            if (XPBDDebugController.IsPaused) return;
+
             _lifeTimer += Time.deltaTime;
 
             UpdateAnimation();

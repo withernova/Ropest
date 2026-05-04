@@ -38,6 +38,22 @@ namespace BasketballGame
 
         void LateUpdate()
         {
+            // XPBD 物理暂停时冻结所有游戏逻辑：
+            // - 不累加 _lifeTimer，避免暂停中自动销毁；
+            // - 不触发生命周期销毁 / killY 检查；
+            // - 不更新 Center（物理也没推进，没必要刷新）。
+            // 只保留"应用初速度"的兜底——极端情况下玩家一暂停就按 N，
+            // 此时球粒子还没应用初速度，下面 TryApplyInitialVelocity 仍需运行一次。
+            if (XPBDDebugController.IsPaused)
+            {
+                if (!_initialVelocityApplied)
+                {
+                    if (TryApplyInitialVelocity())
+                        _initialVelocityApplied = true;
+                }
+                return;
+            }
+
             _lifeTimer += Time.deltaTime;
 
             // 应用初速度：等到 SoftBodyRuntimeSpawner 创建完 Entity 后再写入

@@ -280,6 +280,7 @@ MonoBehaviour:
   clothSubdivision: 15
   clothUseGraphColoring: 0
   ballUseGraphColoring: 0
+  enableXpbdDebugHost: 1
 --- !u!4 &452837690
 Transform:
   m_ObjectHideFlags: 0

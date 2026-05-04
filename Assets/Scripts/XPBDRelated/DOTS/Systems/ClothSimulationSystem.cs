@@ -29,6 +29,15 @@ public partial struct ClothSimulationSystem : ISystem
         float dt = SystemAPI.Time.DeltaTime;
         if (dt <= 0f) return;
 
+        // === 调试暂停 / 单步 支持 ===
+        // XPBDDebugTickSystem 在 FixedStep 开头已统一判断本次 FixedStep 是否推进：
+        // - 未暂停：AllowCurrentFixedStep = true, IsSingleStepFrame = false → 正常跑 N 个 SubStep。
+        // - 暂停且无步进请求：AllowCurrentFixedStep = false → 本系统直接跳过，渲染保持最后状态。
+        // - 暂停且有步进请求：AllowCurrentFixedStep = true, IsSingleStepFrame = true →
+        //   SubStep 数强制为 1，让用户逐迭代查看约束求解过程。
+        if (!XPBDDebugController.AllowCurrentFixedStep) return;
+        bool singleStepMode = XPBDDebugController.IsSingleStepFrame;
+
         _clothQuery.CompleteDependency();
 
         var entities = _clothQuery.ToEntityArray(Allocator.Temp);
@@ -116,7 +125,8 @@ public partial struct ClothSimulationSystem : ISystem
             var colliderData = AnalyticalColliderManager.GetColliderDataForJobs(Allocator.TempJob);
 
             JobHandle constraintHandle = preSolveHandle;
-            for (int step = 0; step < baseCfg.NumSubSteps; step++)
+            int subStepsThisFrame = singleStepMode ? 1 : baseCfg.NumSubSteps;
+            for (int step = 0; step < subStepsThisFrame; step++)
             {
                 // === 距离约束 ===
                 // 根据开关在两种方案之间切换：

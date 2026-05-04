@@ -32,6 +32,10 @@ public partial struct SoftBodySimulationSystem : ISystem
         float dt = SystemAPI.Time.DeltaTime;
         if (dt <= 0f) return;
 
+        // === 调试暂停 / 单步 支持（由 XPBDDebugTickSystem 统一决定本 FixedStep 是否推进） ===
+        if (!XPBDDebugController.AllowCurrentFixedStep) return;
+        bool singleStepMode = XPBDDebugController.IsSingleStepFrame;
+
         _softBodyQuery.CompleteDependency();
 
         var entities = _softBodyQuery.ToEntityArray(Allocator.Temp);
@@ -124,7 +128,8 @@ public partial struct SoftBodySimulationSystem : ISystem
             var colliderData = AnalyticalColliderManager.GetColliderDataForJobs(Allocator.TempJob);
 
             JobHandle constraintHandle = preSolveHandle;
-            for (int step = 0; step < baseCfg.NumSubSteps; step++)
+            int subStepsThisFrame = singleStepMode ? 1 : baseCfg.NumSubSteps;
+            for (int step = 0; step < subStepsThisFrame; step++)
             {
                 // === 距离约束 ===
                 if (useColoringEdges)

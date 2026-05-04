@@ -20,15 +20,19 @@ namespace BasketballGame
         [Range(4, 30)] public int clothSegments = 10;
         [Range(4, 30)] public int clothSubdivision = 10;
 
-        [Header("并行求解开关（调试用）")]
-        [Tooltip("是否为布料启用图着色(Graph Coloring)并行距离约束求解。\n" +
-                 "开启：距离约束按颜色分组并行调度 IJobParallelFor；\n" +
-                 "关闭：回退为串行 IJob。")]
-        public bool clothUseGraphColoring = false;
+    [Header("并行求解开关（调试用）")]
+    [Tooltip("是否为布料启用图着色(Graph Coloring)并行距离约束求解。\n" +
+             "开启：距离约束按颜色分组并行调度 IJobParallelFor；\n" +
+             "关闭：回退为串行 IJob。")]
+    public bool clothUseGraphColoring = false;
 
-        [Tooltip("是否为球体软体启用图着色(Graph Coloring)并行求解（距离约束 + 体积约束）。\n" +
-                 "开启：按颜色分组并行；关闭：回退为串行 IJob。")]
-        public bool ballUseGraphColoring = false;
+    [Tooltip("是否为球体软体启用图着色(Graph Coloring)并行求解（距离约束 + 体积约束）。\n" +
+             "开启：按颜色分组并行；关闭：回退为串行 IJob。")]
+    public bool ballUseGraphColoring = false;
+
+    [Header("XPBD 物理调试")]
+    [Tooltip("是否在场景中启用 XPBD 调试宿主（运行时暂停/单步 + 速度 Gizmos）")]
+    public bool enableXpbdDebugHost = true;
 
         void Awake()
         {
@@ -105,6 +109,13 @@ namespace BasketballGame
             var hudGo = new GameObject("HUD");
             var hud = hudGo.AddComponent<BasketballHUD>();
             hud.shooter = shooter;
+
+            // XPBD 调试宿主：按 P 暂停物理、按 N 单步推进、Gizmos 绘制每个逻辑顶点的速度向量
+            if (enableXpbdDebugHost)
+            {
+                var dbgGo = new GameObject("XPBDDebugHost");
+                dbgGo.AddComponent<XPBDDebugHost>();
+            }
         }
 
         private GameObject BuildBallPrefab()
