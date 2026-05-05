@@ -22,6 +22,11 @@ public class ClothAuthoring : MonoBehaviour
     [Range(1, 20)] public int numSubSteps = 7;
     [Range(0f, 1f)] public float distanceStiffness = 0f;
 
+    [Header("碰撞开关")]
+    [Tooltip("是否启用布料自碰撞（粒子-粒子 空间哈希近邻推开）。\n" +
+             "关闭后 ClothSimulationSystem 会跳过空间哈希构建 + ClothSelfCollisionJob。")]
+    public bool enableSelfCollision = true;
+
     [Header("固定点")]
     [Tooltip("固定的顶点索引列表（invMass设为0）")]
     public List<int> fixedVertices = new List<int>();
@@ -97,7 +102,8 @@ public class ClothAuthoring : MonoBehaviour
                 Subdivision = authoring.subdivision,
                 NumSubSteps = authoring.numSubSteps,
                 Gravity = authoring.gravity,
-                DistanceStiffness = authoring.distanceStiffness
+                DistanceStiffness = authoring.distanceStiffness,
+                EnableSelfCollision = authoring.enableSelfCollision
             });
 
             // === 添加Buffers ===

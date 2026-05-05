@@ -27,6 +27,12 @@ public class Cloth : MonoBehaviour
     // Solver
     public ClothXPBDSolver solver;
 
+    // ==== Benchmark 插桩：供 BaselineBenchmarkRunner 读取 ====
+    // LastSolveMs：上一帧 solver.Simulate 的真实耗时（毫秒，主线程 Stopwatch 量）
+    // LastFrameMs：上一帧 FixedUpdate 全流程耗时（含碰撞遍历+Simulate）
+    [System.NonSerialized] public double LastSolveMs;
+    [System.NonSerialized] public double LastFrameMs;
+
     private void Awake()
     {
         clothMesh = CreateCloth(length, width, segments, subdivision, meshOrigin);
@@ -100,6 +106,10 @@ public class Cloth : MonoBehaviour
     {
         if (!simulate || !ready)
             return;
+
+        // Benchmark 插桩
+        var swFrame = System.Diagnostics.Stopwatch.StartNew();
+
         for (var index = 0; index < clothMesh.vertices.Length; index++)
         {
             solver.direcN[index] = Vector3.zero;
@@ -130,8 +140,14 @@ public class Cloth : MonoBehaviour
                 }
             }
         }
+
+        var swSolve = System.Diagnostics.Stopwatch.StartNew();
         solver.Simulate(Time.fixedDeltaTime);
-        
+        swSolve.Stop();
+
+        swFrame.Stop();
+        LastSolveMs = swSolve.Elapsed.TotalMilliseconds;
+        LastFrameMs = swFrame.Elapsed.TotalMilliseconds;
     }
 
     private Mesh CreateCloth(float len, float wid, int seg, int sub, Vector3 initPos)

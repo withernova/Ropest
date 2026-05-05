@@ -25,7 +25,7 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
     [Tooltip("Z方向尺寸（球体时为 Z 轴半径 * 2）")]
     [Range(0.1f, 20f)] public float sizeZ = 1f;
     [Tooltip("每个轴方向的分段数")]
-    [Range(1, 20)] public int resolution = 4;
+    [Range(1, 50)] public int resolution = 4;
     [Tooltip("球体模式下，是否把表面顶点投影到椭球面（更圆滑）")]
     public bool projectToSphereSurface = true;
     public Vector3 meshOrigin;
@@ -48,7 +48,7 @@ public class SoftBodyRuntimeSpawner : MonoBehaviour
 
     [Header("渲染网格细分")]
     [Tooltip("渲染网格细分迭代次数（0=不细分直接用模拟网格，1=4倍面数，2=16倍面数）")]
-    [Range(0, 3)] public int renderSubdivisionIterations = 2;
+    [Range(0, 3)] public int renderSubdivisionIterations = 0;
 
     [Header("固定点")]
     [Tooltip("固定的顶点索引列表（invMass设为0）")]

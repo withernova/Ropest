@@ -12,8 +12,8 @@ public class ClothRuntimeSpawner : MonoBehaviour
     [Header("布料参数")]
     [Range(0.1f, 100f)] public float length = 5;
     [Range(0.1f, 100f)] public float width = 5;
-    [Range(1, 100)] public int segments = 10;
-    [Range(1, 100)] public int subdivision = 11;
+    [Range(1, 300)] public int segments = 10;
+    [Range(1, 300)] public int subdivision = 11;
     public Vector3 meshOrigin;
     public Material clothMaterial;
 
@@ -30,9 +30,15 @@ public class ClothRuntimeSpawner : MonoBehaviour
              "关闭时回退原先的串行 IJob 方案（数值行为略有不同，但稳定性一致）。")]
     public bool useGraphColoring = false;
 
+    [Header("碰撞开关")]
+    [Tooltip("是否启用布料自碰撞（粒子-粒子 空间哈希近邻推开）。\n" +
+             "关闭后 ClothSimulationSystem 会跳过空间哈希构建 + ClothSelfCollisionJob，\n" +
+             "适合不需要自碰撞或需要排查性能/数值问题的场景。")]
+    public bool enableSelfCollision = false;
+
     [Header("渲染网格细分")]
     [Tooltip("渲染网格细分迭代次数（0=不细分直接用模拟网格，1=4倍面数，2=16倍面数）")]
-    [Range(0, 3)] public int renderSubdivisionIterations = 1;
+    [Range(0, 3)] public int renderSubdivisionIterations = 0;
 
     [Header("固定点")]
     [Tooltip("固定的顶点索引列表（invMass设为0）")]
@@ -190,7 +196,8 @@ public class ClothRuntimeSpawner : MonoBehaviour
             Damping = damping,
             CollisionRadius = collisionRadius,
             Friction = friction,
-            UseGraphColoring = useGraphColoring
+            UseGraphColoring = useGraphColoring,
+            EnableSelfCollision = enableSelfCollision
         });
 
         // === 填充Buffer数据（GetBuffer不触发结构性变更） ===

@@ -3,10 +3,25 @@ using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
+using Unity.Profiling;
 
 [UpdateInGroup(typeof(FixedStepSimulationSystemGroup))]
 public partial struct ClothSimulationSystem : ISystem
 {
+    // === Benchmark 用 ProfilerMarker（Burst 内也可用 ProfilerMarker.Auto/Begin/End） ===
+    // 命名规范：XPBD.<阶段>，在 Unity Profiler 或 Recorder API 中均可按名称查询。
+    static readonly ProfilerMarker k_FrameMarker      = new ProfilerMarker("XPBD.Cloth.Frame");
+    static readonly ProfilerMarker k_ConstraintMarker = new ProfilerMarker("XPBD.Cloth.Constraint");
+    static readonly ProfilerMarker k_CollisionMarker  = new ProfilerMarker("XPBD.Cloth.Collision");
+
+    /// <summary>
+    /// Benchmark 同步模式：BenchmarkRunner 启动时置 true。
+    /// 开启后 k_ConstraintMarker.End() 前会强制 Complete 所有 Job，
+    /// 这样 Marker 度量的是"调度+真实执行"时间，而不是仅调度时间；
+    /// 关闭时保持原异步行为（生产运行）。
+    /// </summary>
+    public static bool BenchmarkSyncMode = false;
+
     private EntityQuery _clothQuery;
 
     public void OnCreate(ref SystemState state)
@@ -37,6 +52,11 @@ public partial struct ClothSimulationSystem : ISystem
         //   SubStep 数强制为 1，让用户逐迭代查看约束求解过程。
         if (!XPBDDebugController.AllowCurrentFixedStep) return;
         bool singleStepMode = XPBDDebugController.IsSingleStepFrame;
+
+        // 帧级 Marker：覆盖整次 OnUpdate 的主线程调度 + Complete 等待。
+        // 注：由于 Job 是异步调度的，单个 Frame Marker 只能度量"调度侧"；真正端到端耗时
+        // 需要在帧末 state.Dependency.Complete() 之后采样，BenchmarkRunner 会用 Recorder 读取。
+        k_FrameMarker.Begin();
 
         _clothQuery.CompleteDependency();
 
@@ -126,6 +146,7 @@ public partial struct ClothSimulationSystem : ISystem
 
             JobHandle constraintHandle = preSolveHandle;
             int subStepsThisFrame = singleStepMode ? 1 : baseCfg.NumSubSteps;
+            k_ConstraintMarker.Begin();
             for (int step = 0; step < subStepsThisFrame; step++)
             {
                 // === 距离约束 ===
@@ -186,7 +207,8 @@ public partial struct ClothSimulationSystem : ISystem
                 }
 
                 // 自碰撞：每隔2个SubStep做一次（平衡性能与效果） —— 布料专属
-                if (step % 2 == 0)
+                // 运行时开关：cfg.EnableSelfCollision 为 false 时整体跳过，避免构建空间哈希表的开销。
+                if (cfg.EnableSelfCollision && step % 2 == 0)
                 {
                     float cellSize = math.max(baseCfg.CollisionRadius * 2f, 0.01f);
 
@@ -232,6 +254,10 @@ public partial struct ClothSimulationSystem : ISystem
                     constraintHandle = analyticalCollisionJob.Schedule(constraintHandle);
                 }
             }
+            // Benchmark 模式下强制完成约束阶段的所有 Job，让 Marker 覆盖真实执行时间。
+            // 注意：Complete() 只等当前 constraintHandle 代表的那条 Job 链；PostSolve 仍是异步。
+            if (BenchmarkSyncMode) constraintHandle.Complete();
+            k_ConstraintMarker.End();
 
             // === 4. PostSolve（含阻尼，共享 XPBDPostSolveJob） ===
             var postSolveJob = new XPBDPostSolveJob
@@ -257,5 +283,9 @@ public partial struct ClothSimulationSystem : ISystem
         state.Dependency = combinedDependency;
 
         entities.Dispose();
+
+        // Benchmark 模式下把整帧所有 Job 等完再结束帧 Marker，保证 frame_ms 反映真实 CPU 占用。
+        if (BenchmarkSyncMode) combinedDependency.Complete();
+        k_FrameMarker.End();
     }
 }

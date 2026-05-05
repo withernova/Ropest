@@ -1,0 +1,5 @@
+experiment,case,segments,subdivision,numParticles,frame_ms_mean,frame_ms_p50,frame_ms_p99,solve_ms_mean,solve_ms_p50,solve_ms_p99,fps_mean
+baseline_oop,15x15,15,15,256,2.470,2.275,4.380,0.777,0.743,1.592,60.0
+baseline_oop,31x31,31,31,1024,20.362,20.397,22.399,3.161,3.066,3.996,47.6
+baseline_oop,47x47,47,47,2304,82.638,81.993,100.635,7.131,6.994,9.036,12.1
+baseline_oop,63x63,63,63,4096,237.004,233.823,290.037,13.195,13.050,15.821,4.2

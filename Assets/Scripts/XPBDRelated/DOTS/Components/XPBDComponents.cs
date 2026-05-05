@@ -212,6 +212,11 @@ public struct ClothSolverConfig : IComponentData
     // 开启前 Spawner 必须对 XPBDEdge 按颜色重排并填充 XPBDEdgeColorRange Buffer。
     public bool UseGraphColoring;
 
+    // 是否启用布料自碰撞（粒子-粒子 基于空间哈希的近邻推开修正）。
+    // 关闭后 ClothSimulationSystem 会跳过空间哈希构建 + ClothSelfCollisionJob，
+    // 用于排查自碰撞相关性能/数值问题，或在不需要自碰撞的场景下节省开销。
+    public bool EnableSelfCollision;
+
     // === 向后兼容字段（旧代码 cfg.NumParticles / cfg.Gravity 等写法依然可用） ===
     public int NumParticles { get => Base.NumParticles; set => Base.NumParticles = value; }
     public int NumSubSteps { get => Base.NumSubSteps; set => Base.NumSubSteps = value; }

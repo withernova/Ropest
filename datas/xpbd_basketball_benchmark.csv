@@ -1,0 +1,13 @@
+metric,value
+duration_s,60.0
+sample_frames,30941
+fps_mean,691.3
+fps_1pct_low,141.8
+frame_ms_mean,1.94
+frame_ms_p50,1.45
+frame_ms_p99,7.05
+cloth_frame_ms_p50,0.74
+cloth_cons_ms_p50,0.68
+soft_frame_ms_p50,1.43
+soft_cons_ms_p50,1.36
+peak_active_particles,3948

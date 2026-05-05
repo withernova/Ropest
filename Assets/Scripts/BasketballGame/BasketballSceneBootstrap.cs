@@ -17,8 +17,8 @@ namespace BasketballGame
         [Header("布料参数")]
         [Range(1f, 10f)] public float clothLength = 4f;
         [Range(1f, 10f)] public float clothWidth = 4f;
-        [Range(4, 30)] public int clothSegments = 10;
-        [Range(4, 30)] public int clothSubdivision = 10;
+        [Range(4, 50)] public int clothSegments = 10;
+        [Range(4, 50)] public int clothSubdivision = 10;
 
     [Header("并行求解开关（调试用）")]
     [Tooltip("是否为布料启用图着色(Graph Coloring)并行距离约束求解。\n" +

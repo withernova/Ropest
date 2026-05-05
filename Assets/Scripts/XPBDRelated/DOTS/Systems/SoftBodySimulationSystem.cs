@@ -3,10 +3,21 @@ using Unity.Collections;
 using Unity.Entities;
 using Unity.Jobs;
 using Unity.Mathematics;
+using Unity.Profiling;
 
 [UpdateInGroup(typeof(FixedStepSimulationSystemGroup))]
 public partial struct SoftBodySimulationSystem : ISystem
 {
+    // === Benchmark 用 ProfilerMarker，命名与 Cloth 保持同构，便于 Runner 统一采集 ===
+    static readonly ProfilerMarker k_FrameMarker      = new ProfilerMarker("XPBD.SoftBody.Frame");
+    static readonly ProfilerMarker k_ConstraintMarker = new ProfilerMarker("XPBD.SoftBody.Constraint");
+
+    /// <summary>
+    /// 与 ClothSimulationSystem.BenchmarkSyncMode 语义一致：
+    /// 开启后在 Constraint/Frame Marker End 之前强制 Complete，保证 Recorder 读取到真实执行时间。
+    /// </summary>
+    public static bool BenchmarkSyncMode = false;
+
     private EntityQuery _softBodyQuery;
 
     public void OnCreate(ref SystemState state)
@@ -35,6 +46,9 @@ public partial struct SoftBodySimulationSystem : ISystem
         // === 调试暂停 / 单步 支持（由 XPBDDebugTickSystem 统一决定本 FixedStep 是否推进） ===
         if (!XPBDDebugController.AllowCurrentFixedStep) return;
         bool singleStepMode = XPBDDebugController.IsSingleStepFrame;
+
+        // 帧级 Marker：覆盖整次 OnUpdate 的主线程调度 + Complete 等待
+        k_FrameMarker.Begin();
 
         _softBodyQuery.CompleteDependency();
 
@@ -126,6 +140,9 @@ public partial struct SoftBodySimulationSystem : ISystem
 
             // === 3. SubSteps: Distance + Volume + 解析碰撞 ===
             var colliderData = AnalyticalColliderManager.GetColliderDataForJobs(Allocator.TempJob);
+
+            // 约束求解阶段 Marker 开始：覆盖 SubSteps 内的距离 + 体积 + 解析碰撞
+            k_ConstraintMarker.Begin();
 
             JobHandle constraintHandle = preSolveHandle;
             int subStepsThisFrame = singleStepMode ? 1 : baseCfg.NumSubSteps;
@@ -246,6 +263,10 @@ public partial struct SoftBodySimulationSystem : ISystem
                 }
             }
 
+            // 约束求解阶段 Marker 结束（Benchmark 同步模式下先 Complete 以测真实执行时间）
+            if (BenchmarkSyncMode) constraintHandle.Complete();
+            k_ConstraintMarker.End();
+
             // === 4. PostSolve（含阻尼，共享 XPBDPostSolveJob） ===
             var postSolveJob = new XPBDPostSolveJob
             {
@@ -268,5 +289,8 @@ public partial struct SoftBodySimulationSystem : ISystem
         state.Dependency = combinedDependency;
 
         entities.Dispose();
+
+        if (BenchmarkSyncMode) state.Dependency.Complete();
+        k_FrameMarker.End();
     }
 }
